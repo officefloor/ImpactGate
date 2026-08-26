@@ -1,0 +1,75 @@
+"""Render a ChangeScore as human text or machine JSON."""
+from __future__ import annotations
+
+import json
+
+from .config import GateConfig
+from .engine import ChangeScore
+
+_MODE_DESC = {"range": "vs {base} (merge-base..HEAD)",
+              "staged": "staged vs HEAD", "worktree": "working tree vs HEAD"}
+
+
+def _thresholds_note(cfg: GateConfig) -> str:
+    w, b = cfg.effective_warn(), cfg.effective_block()
+    parts = []
+    if w is not None:
+        parts.append(f"warn ≥ {int(w):,}")
+    if b is not None:
+        parts.append(f"block ≥ {int(b):,}")
+    return "  (" + " · ".join(parts) + ")" if parts else ""
+
+
+def render_text(score: ChangeScore, cfg: GateConfig, level: str,
+                mode: str, base: str, blocked: bool) -> str:
+    if score.empty:
+        return "impact-gate: no source changes to score."
+    # Tag reflects the OUTCOME under the current enforcement, not just the severity:
+    # in warn/off mode a change over the block threshold is allowed (tag WARN) with a
+    # nudge that it will fail once enforcement is 'block' — the warn->block on-ramp.
+    tag = "BLOCK" if blocked else ("OK" if level == "ok" else "WARN")
+    desc = _MODE_DESC[mode].format(base=base)
+    lines = [
+        f"Change impact: {score.impact:,}   [{tag}]{_thresholds_note(cfg)}",
+        f"  files changed: {score.files_changed}   "
+        f"mutation: {score.mutation:,}   new code: {score.godclass:,}   "
+        f"({desc}, wmc-context: {cfg.wmc_context})",
+    ]
+    if level == "block" and not blocked:
+        lines.append("  note: over the block threshold — this will fail once "
+                     "enforcement is set to 'block'.")
+    if level != "ok" and score.units:
+        lines.append("")
+        lines.append("Top cost drivers — simplify or refactor these:")
+        for u in score.units[:5]:
+            loc = f"{u.path}:{u.name}" if u.name else u.path
+            lines.append(f"  {u.cost:>12,}  {loc}  "
+                         f"(CC {u.cc}, WMC_other {u.wmc_other}, {u.kind})")
+    return "\n".join(lines)
+
+
+def render_json(score: ChangeScore, cfg: GateConfig, level: str,
+                mode: str, base: str, blocked: bool) -> str:
+    return json.dumps({
+        "impact": score.impact,
+        "level": level,
+        "blocked": blocked,
+        "files_changed": score.files_changed,
+        "mutation": score.mutation,
+        "godclass": score.godclass,
+        "mode": mode,
+        "base": base,
+        "wmc_context": cfg.wmc_context,
+        "thresholds": {
+            "warn": cfg.effective_warn(),
+            "block": cfg.effective_block(),
+            "enforcement": cfg.enforcement,
+            "tolerance": cfg.tolerance,
+        },
+        "files": [{"path": f.path, "lang": f.lang, "cost": f.cost,
+                   "mutation": f.mutation, "godclass": f.godclass,
+                   "mut_fns": f.mut_fns, "new_fns": f.new_fns} for f in score.files],
+        "top_units": [{"path": u.path, "name": u.name, "container": u.container,
+                       "cc": u.cc, "wmc_other": u.wmc_other, "cost": u.cost,
+                       "kind": u.kind} for u in score.units[:10]],
+    }, indent=2)

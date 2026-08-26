@@ -1,0 +1,23 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "impact-gate"
+version = "0.1.0"
+description = "Measure and gate structural decay from a change (standalone + CI plugin)."
+readme = "README.md"
+requires-python = ">=3.10"
+# Fully standalone: the change-impact measure is vendored in impact_gate/core.
+# lizard is the only runtime dependency (multi-language CC + line ranges); PyYAML is
+# used only when an .impact-gate.yml config is present.
+dependencies = [
+    "lizard>=1.17",
+    "PyYAML>=6",
+]
+
+[project.scripts]
+impact-gate = "impact_gate.cli:main"
+
+[tool.setuptools]
+packages = ["impact_gate", "impact_gate.core"]
