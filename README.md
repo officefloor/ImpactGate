@@ -65,12 +65,44 @@ wmc_context: before     # measure definition. Uses the pre-change container. Thi
 CLI flags override the file. A CI job can pass `--tolerance` or `--warn-at`. So a team
 can dial tolerance without editing the repo.
 
+## Use in GitHub Actions
+
+Add a workflow to your repo. The action scores the PR branch against its base and writes
+a summary. `fetch-depth: 0` is required so the base branch and merge-base are present.
+
+```yaml
+name: Change impact
+on: pull_request
+permissions:
+  contents: read
+  pull-requests: write         # so the action can post the score as a PR comment
+jobs:
+  impact:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: officefloor/ImpactGate@v1
+        with:
+          enforcement: warn        # switch to block when ready
+          # warn-at: 50000
+          # block-at: 200000
+          # tolerance: 1.0
+```
+
+The score appears in the job summary and as a sticky comment on the PR (one comment,
+updated each run). In `block` mode the job fails when impact exceeds the block threshold.
+Make the check required in branch protection to gate merges. The comment needs
+`pull-requests: write`. Without it the run still passes and just skips the comment.
+
 ## Roadmap
 
-- Core CLI. Score staged, worktree, or range. Warn or block. Text and JSON. Done. This is it.
+- Core CLI. Score staged, worktree, or range. Warn or block. Text, JSON, markdown. Done.
+- GitHub Action. Composite action, job-summary report, and a sticky PR comment. Done.
 - Baseline and grading curve. Profile the project history to set thresholds
   automatically. Blend a seed-corpus prior with the project's own impact distribution.
   Grade a change by its percentile. This is next.
 - Distribution. A Dockerfile so it runs on any CI with Docker. A `pip` package.
-- CI plugins. A GitHub Action first. Then a GitLab CI template and a Jenkins shared library.
+- More CI plugins. A GitLab CI template and a Jenkins shared library.
 - Hooks and IDE. An `impact-gate install-hook` for pre-commit. Editor integration over LSP.

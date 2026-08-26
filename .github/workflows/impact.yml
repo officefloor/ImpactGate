@@ -1,0 +1,20 @@
+name: Change impact
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write     # so the action can post the score as a PR comment
+
+jobs:
+  impact:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0        # needed so the base branch and merge-base are present
+      - uses: ./                # the impact-gate action in this repo
+        with:
+          enforcement: warn     # report only for now; switch to block when ready

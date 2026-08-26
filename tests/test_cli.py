@@ -56,6 +56,17 @@ def test_json_output_shape(repo, capsys):
     assert set(("impact", "level", "blocked", "mode", "thresholds")) <= data.keys()
 
 
+def test_markdown_output(repo, capsys):
+    _prepare(repo)
+    code = main(["score", "--repo", str(repo), "--mode", "worktree",
+                 "--format", "markdown", "--warn-at", "1"])
+    out = capsys.readouterr().out
+    assert code == 0
+    assert "## Change impact: 2" in out
+    assert "| metric | value |" in out
+    assert "Top cost drivers" in out          # warn level shows drivers
+
+
 def test_bad_base_returns_exit_1(repo, capsys):
     write(repo, "m.py", BASE)
     commit(repo, "base")

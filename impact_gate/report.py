@@ -24,9 +24,9 @@ def render_text(score: ChangeScore, cfg: GateConfig, level: str,
                 mode: str, base: str, blocked: bool) -> str:
     if score.empty:
         return "impact-gate: no source changes to score."
-    # Tag reflects the OUTCOME under the current enforcement, not just the severity:
-    # in warn/off mode a change over the block threshold is allowed (tag WARN) with a
-    # nudge that it will fail once enforcement is 'block' — the warn->block on-ramp.
+    # Tag reflects the OUTCOME under the current enforcement, not just the severity.
+    # In warn/off mode a change over the block threshold is allowed (tag WARN), with a
+    # nudge that it will fail once enforcement is 'block'. This is the warn->block on-ramp.
     tag = "BLOCK" if blocked else ("OK" if level == "ok" else "WARN")
     desc = _MODE_DESC[mode].format(base=base)
     lines = [
@@ -36,11 +36,11 @@ def render_text(score: ChangeScore, cfg: GateConfig, level: str,
         f"({desc}, wmc-context: {cfg.wmc_context})",
     ]
     if level == "block" and not blocked:
-        lines.append("  note: over the block threshold — this will fail once "
+        lines.append("  note: over the block threshold. This will fail once "
                      "enforcement is set to 'block'.")
     if level != "ok" and score.units:
         lines.append("")
-        lines.append("Top cost drivers — simplify or refactor these:")
+        lines.append("Top cost drivers. Simplify or refactor these:")
         for u in score.units[:5]:
             loc = f"{u.path}:{u.name}" if u.name else u.path
             lines.append(f"  {u.cost:>12,}  {loc}  "
@@ -73,3 +73,39 @@ def render_json(score: ChangeScore, cfg: GateConfig, level: str,
                        "cc": u.cc, "wmc_other": u.wmc_other, "cost": u.cost,
                        "kind": u.kind} for u in score.units[:10]],
     }, indent=2)
+
+
+def render_markdown(score: ChangeScore, cfg: GateConfig, level: str,
+                    mode: str, base: str, blocked: bool) -> str:
+    """GitHub/GitLab-friendly summary. Written to the CI job summary."""
+    if score.empty:
+        return "**impact-gate:** no source changes to score."
+    verdict = {"ok": "✅ OK", "warn": "⚠️ WARN", "block": "⛔ BLOCK"}[
+        "block" if blocked else ("ok" if level == "ok" else "warn")]
+    desc = _MODE_DESC[mode].format(base=base)
+    lines = [
+        f"## Change impact: {score.impact:,}  {verdict}",
+        "",
+        "| metric | value |",
+        "|---|---|",
+        f"| files changed | {score.files_changed} |",
+        f"| mutation (disturbing existing code) | {score.mutation:,} |",
+        f"| new code | {score.godclass:,} |",
+    ]
+    w, b = cfg.effective_warn(), cfg.effective_block()
+    if w is not None:
+        lines.append(f"| warn threshold | {int(w):,} |")
+    if b is not None:
+        lines.append(f"| block threshold | {int(b):,} |")
+    lines.append(f"| scope | {desc}, wmc-context {cfg.wmc_context} |")
+    if level == "block" and not blocked:
+        lines += ["", "> Over the block threshold. This will fail once enforcement "
+                  "is set to `block`."]
+    if level != "ok" and score.units:
+        lines += ["", "### Top cost drivers. Simplify or refactor these.", "",
+                  "| cost | location | CC | WMC_other | kind |",
+                  "|---|---|---|---|---|"]
+        for u in score.units[:5]:
+            loc = f"`{u.path}:{u.name}`" if u.name else f"`{u.path}`"
+            lines.append(f"| {u.cost:,} | {loc} | {u.cc} | {u.wmc_other} | {u.kind} |")
+    return "\n".join(lines)

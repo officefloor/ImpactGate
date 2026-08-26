@@ -9,6 +9,7 @@ same command and translate the exit code + JSON into a check result / comment.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 
 from .core.config import MeasureConfig
@@ -27,7 +28,7 @@ def _add_score_args(p: argparse.ArgumentParser) -> None:
                    help="base ref for --mode range (default: main). Use e.g. "
                         "origin/main in CI.")
     p.add_argument("--repo", default=".", help="path to the git repo (default: .)")
-    p.add_argument("--format", choices=("text", "json"), default="text")
+    p.add_argument("--format", choices=("text", "json", "markdown"), default="text")
     p.add_argument("--config", help="path to an .impact-gate.yml (else auto-discovered in --repo)")
     # threshold / enforcement overrides (win over the config file when given)
     p.add_argument("--warn-at", type=int)
@@ -64,13 +65,36 @@ def _cmd_score(args) -> int:
 
     if args.format == "json":
         print(report.render_json(score, cfg, level, args.mode, args.base, blocked))
+    elif args.format == "markdown":
+        print(report.render_markdown(score, cfg, level, args.mode, args.base, blocked))
     else:
         print(report.render_text(score, cfg, level, args.mode, args.base, blocked))
         if blocked:
-            print("\nimpact-gate: change BLOCKED — impact exceeds the block threshold. "
+            print("\nimpact-gate: change BLOCKED. Impact exceeds the block threshold. "
                   "Simplify the change or refactor the code it touches, then retry.",
                   file=sys.stderr)
     return 2 if blocked else 0
+
+
+def _cmd_comment(args) -> int:
+    from . import ghapi
+    token = args.token or os.environ.get("GITHUB_TOKEN")
+    repo = args.repo_slug or os.environ.get("GITHUB_REPOSITORY")
+    pr = args.pr or ghapi.detect_pr_number(os.environ.get("GITHUB_EVENT_PATH"))
+    if not token or not repo or not pr:
+        print("impact-gate: need a token, repo (owner/name), and PR number to comment "
+              "(GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_EVENT_PATH are set in Actions).",
+              file=sys.stderr)
+        return 1
+    body = (open(args.body_file, encoding="utf-8").read()
+            if args.body_file else sys.stdin.read())
+    try:
+        result = ghapi.upsert_pr_comment(ghapi.GitHubAPI(token), repo, int(pr), body)
+    except Exception as e:
+        print(f"impact-gate: could not post PR comment: {e}", file=sys.stderr)
+        return 1
+    print(f"impact-gate: PR comment {result}")
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -81,6 +105,13 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("score", help="score the current change and gate on it")
     _add_score_args(s)
     s.set_defaults(func=_cmd_score)
+
+    c = sub.add_parser("comment", help="upsert a sticky PR comment with a report (CI)")
+    c.add_argument("--body-file", help="markdown file to post (default: read stdin)")
+    c.add_argument("--repo-slug", help="owner/name (default: $GITHUB_REPOSITORY)")
+    c.add_argument("--pr", type=int, help="PR number (default: from $GITHUB_EVENT_PATH)")
+    c.add_argument("--token", help="GitHub token (default: $GITHUB_TOKEN)")
+    c.set_defaults(func=_cmd_comment)
 
     args = ap.parse_args(argv)
     try:
