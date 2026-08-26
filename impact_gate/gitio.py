@@ -94,6 +94,21 @@ def changed_files(repo_path: str, mode: str = "staged",
             out.append(ChangedFile(path=new_path, status=d.status,
                                    before=before, after=after,
                                    added=d.added, removed=d.removed))
+
+        # `git diff HEAD` shows only tracked files, so a brand-new untracked file is
+        # invisible in worktree mode. Include those explicitly (all lines added), so a
+        # locally-created file is scored like the added file it will become on commit.
+        if mode == "worktree":
+            others = _git(repo_path, "ls-files", "--others", "--exclude-standard")
+            for path in others.split("\n"):
+                if not path:
+                    continue
+                data = _worktree_bytes(repo_path, path)
+                if data is None:
+                    continue
+                nlines = data.count(b"\n") + 1
+                out.append(ChangedFile(path=path, status="A", before=None,
+                                       after=data, added=[(1, nlines)], removed=[]))
         return out
     finally:
         repo.close()

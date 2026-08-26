@@ -16,8 +16,14 @@ dependencies = [
     "PyYAML>=6",
 ]
 
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
 [project.scripts]
 impact-gate = "impact_gate.cli:main"
 
 [tool.setuptools]
 packages = ["impact_gate", "impact_gate.core"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
