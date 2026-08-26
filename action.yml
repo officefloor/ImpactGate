@@ -32,6 +32,9 @@ inputs:
   working-directory:
     description: "Path to the repository to score."
     default: "."
+  github-token:
+    description: "Token used to post the PR comment. Defaults to the workflow token."
+    default: ""
 
 runs:
   using: "composite"
@@ -55,8 +58,9 @@ runs:
         INPUT_WMC_CONTEXT: ${{ inputs.wmc-context }}
         INPUT_CONFIG: ${{ inputs.config }}
         DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+        GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
       run: |
-        set -o pipefail
+        set +e     # do not abort on a blocking score; capture it and gate at the end
         BASE="$INPUT_BASE"
         if [ -z "$BASE" ]; then
           if [ -n "$GITHUB_BASE_REF" ]; then
@@ -72,4 +76,14 @@ runs:
         if [ -n "$INPUT_TOLERANCE" ]; then args+=(--tolerance "$INPUT_TOLERANCE"); fi
         if [ -n "$INPUT_WMC_CONTEXT" ]; then args+=(--wmc-context "$INPUT_WMC_CONTEXT"); fi
         if [ -n "$INPUT_CONFIG" ]; then args+=(--config "$INPUT_CONFIG"); fi
-        impact-gate "${args[@]}" --format markdown | tee -a "$GITHUB_STEP_SUMMARY"
+
+        report="$RUNNER_TEMP/impact-gate.md"
+        impact-gate "${args[@]}" --format markdown | tee "$report"
+        code=${PIPESTATUS[0]}
+        cat "$report" >> "$GITHUB_STEP_SUMMARY"
+
+        if [ "$GITHUB_EVENT_NAME" = "pull_request" ] && [ -n "$GITHUB_TOKEN" ]; then
+          impact-gate comment --body-file "$report" \
+            || echo "::warning::impact-gate could not post the PR comment. Grant 'pull-requests: write' to the workflow."
+        fi
+        exit "$code"

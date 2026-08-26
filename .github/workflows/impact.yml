@@ -6,6 +6,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: write     # so the action can post the score as a PR comment
 
 jobs:
   impact:

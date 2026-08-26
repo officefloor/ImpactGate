@@ -75,6 +75,7 @@ name: Change impact
 on: pull_request
 permissions:
   contents: read
+  pull-requests: write         # so the action can post the score as a PR comment
 jobs:
   impact:
     runs-on: ubuntu-latest
@@ -90,17 +91,18 @@ jobs:
           # tolerance: 1.0
 ```
 
-The score appears in the job summary. In `block` mode the job fails when impact exceeds
-the block threshold. Make the check required in branch protection to gate merges.
+The score appears in the job summary and as a sticky comment on the PR (one comment,
+updated each run). In `block` mode the job fails when impact exceeds the block threshold.
+Make the check required in branch protection to gate merges. The comment needs
+`pull-requests: write`. Without it the run still passes and just skips the comment.
 
 ## Roadmap
 
 - Core CLI. Score staged, worktree, or range. Warn or block. Text, JSON, markdown. Done.
-- GitHub Action. Composite action plus a job-summary report. Done.
+- GitHub Action. Composite action, job-summary report, and a sticky PR comment. Done.
 - Baseline and grading curve. Profile the project history to set thresholds
   automatically. Blend a seed-corpus prior with the project's own impact distribution.
   Grade a change by its percentile. This is next.
 - Distribution. A Dockerfile so it runs on any CI with Docker. A `pip` package.
 - More CI plugins. A GitLab CI template and a Jenkins shared library.
 - Hooks and IDE. An `impact-gate install-hook` for pre-commit. Editor integration over LSP.
-- PR comment. Post the score as a sticky comment, not just a job summary.
