@@ -27,7 +27,7 @@ def _add_score_args(p: argparse.ArgumentParser) -> None:
                    help="base ref for --mode range (default: main). Use e.g. "
                         "origin/main in CI.")
     p.add_argument("--repo", default=".", help="path to the git repo (default: .)")
-    p.add_argument("--format", choices=("text", "json"), default="text")
+    p.add_argument("--format", choices=("text", "json", "markdown"), default="text")
     p.add_argument("--config", help="path to an .impact-gate.yml (else auto-discovered in --repo)")
     # threshold / enforcement overrides (win over the config file when given)
     p.add_argument("--warn-at", type=int)
@@ -64,6 +64,8 @@ def _cmd_score(args) -> int:
 
     if args.format == "json":
         print(report.render_json(score, cfg, level, args.mode, args.base, blocked))
+    elif args.format == "markdown":
+        print(report.render_markdown(score, cfg, level, args.mode, args.base, blocked))
     else:
         print(report.render_text(score, cfg, level, args.mode, args.base, blocked))
         if blocked:
