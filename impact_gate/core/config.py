@@ -66,7 +66,16 @@ class MeasureConfig:
         return self.lang_by_ext.get(self.ext(path))
 
     def is_ignored(self, path: str) -> bool:
-        return any(fnmatch.fnmatch(path, pat) for pat in self.ignore)
+        # Match each glob against the path, and also with a leading "**/" stripped, so a
+        # pattern like "**/vendor/**" ignores a TOP-LEVEL vendor/ too. fnmatch's "*" spans
+        # "/", but "**/vendor/**" still requires a parent segment before "vendor", which
+        # let a repo-root vendor/ or node_modules/ slip through.
+        for pat in self.ignore:
+            if fnmatch.fnmatch(path, pat):
+                return True
+            if pat.startswith("**/") and fnmatch.fnmatch(path, pat[3:]):
+                return True
+        return False
 
     def is_test(self, path: str) -> bool:
         return any(fnmatch.fnmatch(path, pat) for pat in self.test_patterns)
