@@ -1,0 +1,27 @@
+{
+  "_meta": {
+    "provisional": true,
+    "note": "PLACEHOLDER tables. Replace `pooled` and `languages` with output from the corrected clean before-context corpus scan (top-level vendored dirs excluded). Keep this schema and the `percentiles` axis; only the numbers change. When you swap real numbers in, set provisional to false and fill `source`.",
+    "metric": "composite",
+    "measure": "before-context WMC",
+    "unit": "per-commit composite impact = (mutation + godclass) * files_changed",
+    "source": "PLACEHOLDER pending clean corpus scan of ~/Surveyor"
+  },
+  "percentiles": [50, 75, 90, 95, 98, 99],
+  "pooled": {
+    "n": 0,
+    "values": [120, 480, 1600, 3800, 9500, 18000]
+  },
+  "languages": {
+    "python":     { "n": 0, "values": [90,  360, 1200, 2900, 7000, 13000] },
+    "java":       { "n": 0, "values": [150, 600, 2000, 4800, 12000, 22000] },
+    "javascript": { "n": 0, "values": [100, 400, 1400, 3300, 8200, 15500] },
+    "typescript": { "n": 0, "values": [110, 430, 1500, 3500, 8700, 16500] },
+    "go":         { "n": 0, "values": [80,  320, 1100, 2600, 6400, 12000] },
+    "csharp":     { "n": 0, "values": [140, 560, 1900, 4500, 11000, 20500] },
+    "cpp":        { "n": 0, "values": [160, 640, 2100, 5000, 12500, 23500] },
+    "c":          { "n": 0, "values": [130, 520, 1750, 4200, 10500, 19500] },
+    "ruby":       { "n": 0, "values": [85,  340, 1150, 2750, 6800, 12800] },
+    "rust":       { "n": 0, "values": [105, 420, 1450, 3400, 8500, 16000] }
+  }
+}

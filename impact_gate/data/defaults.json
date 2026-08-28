@@ -1,0 +1,25 @@
+{
+  "_meta": {
+    "note": "Default gate and grading-curve constants, single-sourced here so tuning is a config edit, not a code change. GateConfig reads these as its built-in defaults; an .impact-gate.yml and CLI flags still override per-repo.",
+    "provisional": true
+  },
+
+  "enforcement": "warn",
+  "tolerance": 1.0,
+
+  "absolute": {
+    "note": "Absolute composite-impact thresholds. Used when the curve is off, and as the fallback before a project baseline exists. null = that threshold is not set.",
+    "warn_at": null,
+    "block_at": null
+  },
+
+  "curve": {
+    "note": "Percentile-based grading. When enabled, a change is graded by its percentile against the blended (seed + project) distribution instead of a raw number.",
+    "enabled": false,
+    "metric": "composite",
+    "warn_percentile": 90,
+    "block_percentile": 98,
+    "prior_weight_K": 200,
+    "baseline_file": ".impact-gate-baseline.json"
+  }
+}
