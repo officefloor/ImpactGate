@@ -23,7 +23,10 @@ dev = ["pytest>=7"]
 impact-gate = "impact_gate.cli:main"
 
 [tool.setuptools]
-packages = ["impact_gate", "impact_gate.core"]
+packages = ["impact_gate", "impact_gate.core", "impact_gate.data"]
+
+[tool.setuptools.package-data]
+"impact_gate.data" = ["*.json"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

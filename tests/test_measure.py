@@ -25,13 +25,12 @@ def test_isolated_new_file_floors_wmc_to_one():
     assert s.impact == 2
 
 
-def test_before_vs_after_context_on_new_file():
-    # Three new functions in a new file. This is the import case.
+def test_greenfield_new_file_uses_before_context():
+    # Three new functions in a new file. This is the import case. Under the canonical
+    # before-context, each new func has no prior siblings -> WMC 1 -> cost 1*1*2 = 2;
+    # total 6. (The removed after-context would have charged each for the other two.)
     cf = ChangedFile("m.py", "A", None, THREE, added=[(1, 8)], removed=[])
-    # before: each new func has no prior siblings -> WMC 1 -> cost 1*1*2 = 2; total 6.
-    assert score_change([cf], wmc_context="before").impact == 6
-    # after: each func sees the other two as siblings -> WMC 3-1 = 2 -> cost 4; total 12.
-    assert score_change([cf], wmc_context="after").impact == 12
+    assert score_change([cf]).impact == 6
 
 
 def test_accretion_charged_for_prior_siblings():

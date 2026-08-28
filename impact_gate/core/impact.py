@@ -2,9 +2,9 @@
 
 cost(unit)    = max(WMC_other, 1) * CC * max(1, dlines)
   WMC_other   = sum CC of the OTHER units sharing the unit's container, measured on
-                the PRE-change (before) container by default (`wmc_context`), so a unit
-                added to a brand-new container costs ~CC*dlines while a method accreted
-                onto an existing class is still charged for the siblings already there.
+                the PRE-change (before) container, so a unit added to a brand-new
+                container costs ~CC*dlines while a method accreted onto an existing
+                class is still charged for the siblings already there.
 mutation_cost = sum cost over modified/renamed existing units
 godclass_cost = sum cost over new units (new files + new methods)
 
@@ -80,33 +80,26 @@ def compute_file_impact(
     before: list[Unit], after: list[Unit],
     before_src: list[str], after_src: list[str],
     added: list[tuple[int, int]], removed: list[tuple[int, int]],
-    rename_jaccard: float, wmc_context: str = "before",
+    rename_jaccard: float,
 ) -> FileImpact:
     added_lines = _line_set(added)
     removed_lines = _line_set(removed)
 
-    # WMC_other = the surrounding complexity you must comprehend to change a unit.
-    # Two definitions, selected by `wmc_context`:
-    #   "after"  — the container as it stands in the RESULTING file (original behaviour).
-    #   "before" — the complexity that PRE-EXISTED the change (the context you faced).
-    # Under "before", a unit added to a brand-new container has no prior siblings, so its
-    # WMC_other falls to 0 (floored to 1): importing/greenfield code costs only ~CC*dlines,
-    # while a method accreted onto an existing (god) class is still charged for the siblings
-    # that were already there — so growth-by-accretion stays expensive.
-    after_by_container: dict[str, int] = {}
-    for u in after:
-        after_by_container[u.container] = after_by_container.get(u.container, 0) + u.cc
+    # WMC_other = the surrounding complexity you must comprehend to change a unit,
+    # measured on the PRE-change (before) container: the complexity that pre-existed the
+    # change (the context you faced). A unit added to a brand-new container has no prior
+    # siblings, so its WMC_other falls to 0 (floored to 1): importing/greenfield code costs
+    # only ~CC*dlines, while a method accreted onto an existing (god) class is still charged
+    # for the siblings that were already there — so growth-by-accretion stays expensive.
     before_by_container: dict[str, int] = {}
     for u in before:
         before_by_container[u.container] = before_by_container.get(u.container, 0) + u.cc
 
     def _wmc(u: Unit, src: Unit | None) -> int:
-        if wmc_context == "before":
-            # other pre-existing complexity in the container; subtract the unit's own prior
-            # contribution (`src`) only if it already existed — a new unit subtracts nothing.
-            base = before_by_container.get(u.container, 0)
-            return max(base - (src.cc if src is not None else 0), 0)
-        return max(after_by_container.get(u.container, 0) - u.cc, 0)
+        # other pre-existing complexity in the container; subtract the unit's own prior
+        # contribution (`src`) only if it already existed — a new unit subtracts nothing.
+        base = before_by_container.get(u.container, 0)
+        return max(base - (src.cc if src is not None else 0), 0)
 
     before_by_name = {u.name: u for u in before}
     after_names = {u.name for u in after}

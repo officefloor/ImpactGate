@@ -35,14 +35,13 @@ def _add_score_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--block-at", type=int)
     p.add_argument("--enforcement", choices=ENFORCEMENTS)
     p.add_argument("--tolerance", type=float)
-    p.add_argument("--wmc-context", choices=("before", "after"))
     p.add_argument("--measure-config", help="Surveyor-style YAML for ignore globs etc.")
 
 
 def _resolve_config(args) -> GateConfig:
     cfg = GateConfig.load(args.config, args.repo)
     for attr in ("warn_at", "block_at", "enforcement", "tolerance",
-                 "wmc_context", "measure_config"):
+                 "measure_config"):
         val = getattr(args, attr, None)
         if val is not None:
             setattr(cfg, attr, val)
@@ -59,7 +58,7 @@ def _cmd_score(args) -> int:
         print(f"impact-gate: {e}", file=sys.stderr)
         return 1
 
-    score = score_change(changed, mcfg, cfg.wmc_context)
+    score = score_change(changed, mcfg)
     level = cfg.level(score.impact)
     blocked = cfg.blocks(score.impact)
 

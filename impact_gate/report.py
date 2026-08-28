@@ -33,7 +33,7 @@ def render_text(score: ChangeScore, cfg: GateConfig, level: str,
         f"Change impact: {score.impact:,}   [{tag}]{_thresholds_note(cfg)}",
         f"  files changed: {score.files_changed}   "
         f"mutation: {score.mutation:,}   new code: {score.godclass:,}   "
-        f"({desc}, wmc-context: {cfg.wmc_context})",
+        f"({desc})",
     ]
     if level == "block" and not blocked:
         lines.append("  note: over the block threshold. This will fail once "
@@ -59,7 +59,6 @@ def render_json(score: ChangeScore, cfg: GateConfig, level: str,
         "godclass": score.godclass,
         "mode": mode,
         "base": base,
-        "wmc_context": cfg.wmc_context,
         "thresholds": {
             "warn": cfg.effective_warn(),
             "block": cfg.effective_block(),
@@ -97,7 +96,7 @@ def render_markdown(score: ChangeScore, cfg: GateConfig, level: str,
         lines.append(f"| warn threshold | {int(w):,} |")
     if b is not None:
         lines.append(f"| block threshold | {int(b):,} |")
-    lines.append(f"| scope | {desc}, wmc-context {cfg.wmc_context} |")
+    lines.append(f"| scope | {desc} |")
     if level == "block" and not blocked:
         lines += ["", "> Over the block threshold. This will fail once enforcement "
                   "is set to `block`."]
