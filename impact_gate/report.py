@@ -10,6 +10,14 @@ _MODE_DESC = {"range": "vs {base} (merge-base..HEAD)",
               "staged": "staged vs HEAD", "worktree": "working tree vs HEAD"}
 
 
+def _unit_parts(u) -> tuple[str, str]:
+    """(container, short_name) for a unit. "Owner::addOwner" -> ("Owner", "addOwner");
+    a free function keeps its name and reports container "" (file scope). The class is
+    what you look at when a driver is heavy, so the reports show it beside the method."""
+    short = u.name.rpartition("::")[2] if "::" in u.name else u.name
+    return u.container, short
+
+
 def _thresholds_note(cfg: GateConfig) -> str:
     w, b = cfg.effective_warn(), cfg.effective_block()
     parts = []
@@ -42,9 +50,11 @@ def render_text(score: ChangeScore, cfg: GateConfig, level: str,
         lines.append("")
         lines.append("Top cost drivers. Simplify or refactor these:")
         for u in score.units[:5]:
-            loc = f"{u.path}:{u.name}" if u.name else u.path
+            container, short = _unit_parts(u)
+            loc = f"{u.path}:{short}" if short else u.path
+            where = f"in {container}" if container else "file scope"
             lines.append(f"  {u.cost:>12,}  {loc}  "
-                         f"(CC {u.cc}, WMC_other {u.wmc_other}, {u.kind})")
+                         f"({where}, CC {u.cc}, WMC_other {u.wmc_other}, {u.kind})")
     return "\n".join(lines)
 
 
@@ -102,9 +112,12 @@ def render_markdown(score: ChangeScore, cfg: GateConfig, level: str,
                   "is set to `block`."]
     if level != "ok" and score.units:
         lines += ["", "### Top cost drivers. Simplify or refactor these.", "",
-                  "| cost | location | CC | WMC_other | kind |",
-                  "|---|---|---|---|---|"]
+                  "| cost | location | class | CC | WMC_other | kind |",
+                  "|---|---|---|---|---|---|"]
         for u in score.units[:5]:
-            loc = f"`{u.path}:{u.name}`" if u.name else f"`{u.path}`"
-            lines.append(f"| {u.cost:,} | {loc} | {u.cc} | {u.wmc_other} | {u.kind} |")
+            container, short = _unit_parts(u)
+            loc = f"`{u.path}:{short}`" if short else f"`{u.path}`"
+            cls = f"`{container}`" if container else "_file scope_"
+            lines.append(f"| {u.cost:,} | {loc} | {cls} | {u.cc} | {u.wmc_other} | "
+                         f"{u.kind} |")
     return "\n".join(lines)

@@ -21,5 +21,12 @@
     "block_percentile": 98,
     "prior_weight_K": 200,
     "baseline_file": ".impact-gate-baseline.json"
+  },
+
+  "baseline": {
+    "note": "How the merged history becomes the per-commit distribution. Walk the first-parent mainline of the merged base branch (only landed work; in-flight branches are never reached). One observation per atomic landed change: a main non-merge commit (its own diff); a leaf MR (net branch-start..tip); a parent MR's direct commits netted per run between merges, each based at the preceding synced base, with child MRs recursing and parent/main syncs skipped. A merge is never scored as its own diff, so a long-running roll-up cannot inflate the numbers. exclude_subject_pattern skips an MR by its merge-commit subject; max_commits caps how many recent mainline commits are walked.",
+    "base_ref": "main",
+    "exclude_subject_pattern": null,
+    "max_commits": null
   }
 }
