@@ -57,6 +57,22 @@ def test_validate_rejects_bad_curve_knobs():
         GateConfig(curve_prior_weight=-1).validate()
 
 
+def test_level_for_grade_maps_percentile_to_verdict():
+    cfg = GateConfig(warn_percentile=90, block_percentile=98)
+    assert cfg.level_for_grade(50) == "ok"
+    assert cfg.level_for_grade(90) == "warn"      # at the warn line
+    assert cfg.level_for_grade(95) == "warn"
+    assert cfg.level_for_grade(98) == "block"     # at the block line
+    assert cfg.level_for_grade(99.9) == "block"
+
+
+def test_blocks_grade_only_under_block_enforcement():
+    high = 99.0
+    assert GateConfig(enforcement="block", block_percentile=98).blocks_grade(high) is True
+    # A high grade under warn enforcement is allowed (the warn->block on-ramp).
+    assert GateConfig(enforcement="warn", block_percentile=98).blocks_grade(high) is False
+
+
 def test_config_file_overrides_curve_knobs(tmp_path):
     (tmp_path / ".impact-gate.yml").write_text(
         "curve_enabled: true\nwarn_percentile: 80\nblock_percentile: 95\n"

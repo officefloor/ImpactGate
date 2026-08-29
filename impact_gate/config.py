@@ -69,6 +69,20 @@ class GateConfig:
         one case that fails the gate. In 'warn' mode a too-high change still passes."""
         return self.enforcement == "block" and self.level(impact) == "block"
 
+    def level_for_grade(self, percentile: float) -> str:
+        """Curve mode: 'block' / 'warn' / 'ok' from a change's grade percentile. A change
+        at or above `block_percentile` blocks; at or above `warn_percentile` warns."""
+        if percentile >= self.block_percentile:
+            return "block"
+        if percentile >= self.warn_percentile:
+            return "warn"
+        return "ok"
+
+    def blocks_grade(self, percentile: float) -> bool:
+        """Curve analogue of `blocks`: fails the gate only under 'block' enforcement."""
+        return (self.enforcement == "block"
+                and self.level_for_grade(percentile) == "block")
+
     @classmethod
     def load(cls, path: str | None = None, repo_path: str = ".") -> "GateConfig":
         """Load from an explicit path, else the first `.impact-gate.y*ml` in repo_path."""

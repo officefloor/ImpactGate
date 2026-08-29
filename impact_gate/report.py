@@ -28,8 +28,23 @@ def _thresholds_note(cfg: GateConfig) -> str:
     return "  (" + " · ".join(parts) + ")" if parts else ""
 
 
+def _grade_source(grade) -> str:
+    """How the grade was arrived at: pure seed at cold start, else the blend weight."""
+    if grade.project_percentile is None:
+        return "seed only"
+    return f"blended n={grade.n}, w={grade.weight:.2f}"
+
+
+def _grade_line(grade, cfg: GateConfig) -> str:
+    """The percentile-grade line for text output, carrying the curve thresholds."""
+    lang = grade.language or "pooled"
+    return (f"  grade: {grade.percentile:g}th percentile   "
+            f"(warn ≥ p{cfg.warn_percentile:g} · block ≥ p{cfg.block_percentile:g}; "
+            f"{lang}, {_grade_source(grade)})")
+
+
 def render_text(score: ChangeScore, cfg: GateConfig, level: str,
-                mode: str, base: str, blocked: bool) -> str:
+                mode: str, base: str, blocked: bool, grade=None) -> str:
     if score.empty:
         return "impact-gate: no source changes to score."
     # Tag reflects the OUTCOME under the current enforcement, not just the severity.
@@ -37,10 +52,13 @@ def render_text(score: ChangeScore, cfg: GateConfig, level: str,
     # nudge that it will fail once enforcement is 'block'. This is the warn->block on-ramp.
     tag = "BLOCK" if blocked else ("OK" if level == "ok" else "WARN")
     desc = _MODE_DESC[mode].format(base=base)
-    lines = [
-        f"Change impact: {score.impact:,}   [{tag}]{_thresholds_note(cfg)}",
-        f"  files changed: {score.files_changed}   ({desc})",
-    ]
+    # In curve mode the grade line carries the (percentile) thresholds; in absolute mode
+    # they hang off the headline instead.
+    note = "" if grade is not None else _thresholds_note(cfg)
+    lines = [f"Change impact: {score.impact:,}   [{tag}]{note}"]
+    if grade is not None:
+        lines.append(_grade_line(grade, cfg))
+    lines.append(f"  files changed: {score.files_changed}   ({desc})")
     if level == "block" and not blocked:
         lines.append("  note: over the block threshold. This will fail once "
                      "enforcement is set to 'block'.")
@@ -65,31 +83,47 @@ def render_text(score: ChangeScore, cfg: GateConfig, level: str,
 
 
 def render_json(score: ChangeScore, cfg: GateConfig, level: str,
-                mode: str, base: str, blocked: bool) -> str:
-    return json.dumps({
+                mode: str, base: str, blocked: bool, grade=None) -> str:
+    thresholds = {
+        "warn": cfg.effective_warn(),
+        "block": cfg.effective_block(),
+        "enforcement": cfg.enforcement,
+        "tolerance": cfg.tolerance,
+    }
+    if grade is not None:
+        thresholds["warn_percentile"] = cfg.warn_percentile
+        thresholds["block_percentile"] = cfg.block_percentile
+    out = {
         "impact": score.impact,
         "level": level,
         "blocked": blocked,
+        "curve": cfg.curve_enabled,
         "files_changed": score.files_changed,
         "mode": mode,
         "base": base,
-        "thresholds": {
-            "warn": cfg.effective_warn(),
-            "block": cfg.effective_block(),
-            "enforcement": cfg.enforcement,
-            "tolerance": cfg.tolerance,
-        },
+        "thresholds": thresholds,
         "files": [{"path": f.path, "lang": f.lang, "cost": f.cost,
                    "mutation": f.mutation, "godclass": f.godclass,
                    "mut_fns": f.mut_fns, "new_fns": f.new_fns} for f in score.files],
         "top_units": [{"path": u.path, "name": u.name, "container": u.container,
                        "cc": u.cc, "wmc_other": u.wmc_other, "cost": u.cost,
                        "kind": u.kind} for u in score.units[:10]],
-    }, indent=2)
+    }
+    if grade is not None:
+        out["grade"] = {
+            "percentile": grade.percentile,
+            "value": grade.value,
+            "seed_percentile": grade.seed_percentile,
+            "project_percentile": grade.project_percentile,
+            "weight": grade.weight,
+            "n": grade.n,
+            "language": grade.language,
+        }
+    return json.dumps(out, indent=2)
 
 
 def render_markdown(score: ChangeScore, cfg: GateConfig, level: str,
-                    mode: str, base: str, blocked: bool) -> str:
+                    mode: str, base: str, blocked: bool, grade=None) -> str:
     """GitHub/GitLab-friendly summary. Written to the CI job summary."""
     if score.empty:
         return "**impact-gate:** no source changes to score."
@@ -103,11 +137,17 @@ def render_markdown(score: ChangeScore, cfg: GateConfig, level: str,
         "|---|---|",
         f"| files changed | {score.files_changed} |",
     ]
-    w, b = cfg.effective_warn(), cfg.effective_block()
-    if w is not None:
-        lines.append(f"| warn threshold | {int(w):,} |")
-    if b is not None:
-        lines.append(f"| block threshold | {int(b):,} |")
+    if grade is not None:
+        lines.append(f"| grade | {grade.percentile:g}th percentile "
+                     f"({grade.language or 'pooled'}, {_grade_source(grade)}) |")
+        lines.append(f"| warn / block percentile | p{cfg.warn_percentile:g} / "
+                     f"p{cfg.block_percentile:g} |")
+    else:
+        w, b = cfg.effective_warn(), cfg.effective_block()
+        if w is not None:
+            lines.append(f"| warn threshold | {int(w):,} |")
+        if b is not None:
+            lines.append(f"| block threshold | {int(b):,} |")
     lines.append(f"| scope | {desc} |")
     if level == "block" and not blocked:
         lines += ["", "> Over the block threshold. This will fail once enforcement "

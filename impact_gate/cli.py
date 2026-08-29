@@ -10,11 +10,12 @@ from __future__ import annotations
 
 import argparse
 import os
+import subprocess
 import sys
 
 from .core.config import MeasureConfig
 
-from . import __version__, gitio, report
+from . import __version__, baseline, gitio, report
 from .config import ENFORCEMENTS, GateConfig
 from .engine import score_change
 
@@ -36,12 +37,25 @@ def _add_score_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--enforcement", choices=ENFORCEMENTS)
     p.add_argument("--tolerance", type=float)
     p.add_argument("--measure-config", help="Surveyor-style YAML for ignore globs etc.")
+    # grading curve (percentile gate) overrides
+    p.add_argument("--curve", dest="curve_enabled", action="store_const", const=True,
+                   default=None, help="gate on the change's percentile grade against the "
+                   "baseline distribution instead of absolute thresholds")
+    p.add_argument("--baseline-file", dest="baseline_file",
+                   help="project baseline cache to grade against (default: "
+                        ".impact-gate-baseline.json)")
+    p.add_argument("--warn-percentile", dest="warn_percentile", type=float)
+    p.add_argument("--block-percentile", dest="block_percentile", type=float)
+
+
+# Gate knobs an argparse flag may override on top of the config file, when given.
+_OVERRIDE_ATTRS = ("warn_at", "block_at", "enforcement", "tolerance", "measure_config",
+                   "curve_enabled", "baseline_file", "warn_percentile", "block_percentile")
 
 
 def _resolve_config(args) -> GateConfig:
     cfg = GateConfig.load(args.config, args.repo)
-    for attr in ("warn_at", "block_at", "enforcement", "tolerance",
-                 "measure_config"):
+    for attr in _OVERRIDE_ATTRS:
         val = getattr(args, attr, None)
         if val is not None:
             setattr(cfg, attr, val)
@@ -59,20 +73,57 @@ def _cmd_score(args) -> int:
         return 1
 
     score = score_change(changed, mcfg)
-    level = cfg.level(score.impact)
-    blocked = cfg.blocks(score.impact)
+
+    grade = None
+    if cfg.curve_enabled:
+        bl = baseline.load_baseline(os.path.join(args.repo, cfg.baseline_file))
+        grade = baseline.grade_change(score, baseline=bl,
+                                      prior_weight_K=cfg.curve_prior_weight)
+        level = cfg.level_for_grade(grade.percentile)
+        blocked = cfg.blocks_grade(grade.percentile)
+    else:
+        level = cfg.level(score.impact)
+        blocked = cfg.blocks(score.impact)
 
     if args.format == "json":
-        print(report.render_json(score, cfg, level, args.mode, args.base, blocked))
+        print(report.render_json(score, cfg, level, args.mode, args.base, blocked, grade))
     elif args.format == "markdown":
-        print(report.render_markdown(score, cfg, level, args.mode, args.base, blocked))
+        print(report.render_markdown(score, cfg, level, args.mode, args.base, blocked, grade))
     else:
-        print(report.render_text(score, cfg, level, args.mode, args.base, blocked))
+        print(report.render_text(score, cfg, level, args.mode, args.base, blocked, grade))
         if blocked:
             print("\nimpact-gate: change BLOCKED. Impact exceeds the block threshold. "
                   "Simplify the change or refactor the code it touches, then retry.",
                   file=sys.stderr)
     return 2 if blocked else 0
+
+
+def _cmd_baseline(args) -> int:
+    """Walk the merged mainline into the project distribution and cache it to disk."""
+    cfg = _resolve_config(args)
+    mcfg = MeasureConfig.load(cfg.measure_config)
+    out_path = os.path.join(args.repo, cfg.baseline_file)
+    try:
+        bl = baseline.build_baseline(
+            args.repo, mcfg,
+            base_ref=args.base_ref,
+            max_commits=args.max_commits,
+            exclude_subject_pattern=args.exclude_subject_pattern,
+        )
+    except (gitio.DiffError, OSError, ValueError,
+            subprocess.CalledProcessError) as e:
+        print(f"impact-gate: could not build baseline (is '{args.base_ref or 'main'}' "
+              f"a branch with history?): {e}", file=sys.stderr)
+        return 1
+    if bl.n == 0:
+        print(f"impact-gate: no landed changes found on '{bl.base_ref}'; nothing to "
+              "baseline. Check --base-ref points at a branch with history.",
+              file=sys.stderr)
+        return 1
+    baseline.save_baseline(bl, out_path)
+    print(f"impact-gate: baseline written to {out_path} "
+          f"({bl.n} observations from '{bl.base_ref}').")
+    return 0
 
 
 def _cmd_comment(args) -> int:
@@ -104,6 +155,21 @@ def main(argv: list[str] | None = None) -> int:
     s = sub.add_parser("score", help="score the current change and gate on it")
     _add_score_args(s)
     s.set_defaults(func=_cmd_score)
+
+    b = sub.add_parser("baseline",
+                       help="build and cache the project baseline distribution")
+    b.add_argument("--repo", default=".", help="path to the git repo (default: .)")
+    b.add_argument("--config", help="path to an .impact-gate.yml (else auto-discovered)")
+    b.add_argument("--base-ref", dest="base_ref",
+                   help="mainline branch to walk (default: main, or config's base_ref)")
+    b.add_argument("--max-commits", dest="max_commits", type=int,
+                   help="cap how many recent mainline commits are walked")
+    b.add_argument("--exclude-subject-pattern", dest="exclude_subject_pattern",
+                   help="regex on a merge subject to skip that MR entirely")
+    b.add_argument("--baseline-file", dest="baseline_file",
+                   help="where to write the cache (default: .impact-gate-baseline.json)")
+    b.add_argument("--measure-config", help="Surveyor-style YAML for ignore globs etc.")
+    b.set_defaults(func=_cmd_baseline)
 
     c = sub.add_parser("comment", help="upsert a sticky PR comment with a report (CI)")
     c.add_argument("--body-file", help="markdown file to post (default: read stdin)")
