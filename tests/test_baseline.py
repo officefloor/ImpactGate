@@ -58,10 +58,9 @@ def test_walk_counts_atomic_changes_not_merges(tmp_path):
     bl = baseline.build_baseline(str(repo), base_ref="main")
     # Six atomic changes; the three merge commits contribute no observation of their own.
     assert bl.n == 6
-    assert len(bl.values["composite"]) == 6
-    assert len(bl.values["mutation"]) == 6
-    assert all(v > 0 for v in bl.values["composite"])
-    assert bl.values["composite"] == sorted(bl.values["composite"])
+    assert len(bl.dist) == 6
+    assert all(v > 0 for v in bl.dist)
+    assert bl.dist == sorted(bl.dist)
 
 
 def test_subject_pattern_excludes_an_mr(tmp_path):
@@ -75,26 +74,24 @@ def test_subject_pattern_excludes_an_mr(tmp_path):
 
 
 def test_percentile_rank_endpoints_and_middle():
-    bl = Baseline(n=5, values={"composite": [10, 20, 30, 40, 50]})
-    assert bl.rank("composite", 5) == 0.0        # below all
-    assert bl.rank("composite", 100) == 100.0    # above all
-    assert bl.rank("composite", 30) == 50.0      # the median value
+    bl = Baseline(n=5, dist=[10, 20, 30, 40, 50])
+    assert bl.rank(5) == 0.0        # below all
+    assert bl.rank(100) == 100.0    # above all
+    assert bl.rank(30) == 50.0      # the median value
 
 
 def test_cold_start_grade_is_pure_seed():
-    g = grade_value(500, metric="composite", language="python",
-                    baseline=None, prior_weight_K=200)
+    g = grade_value(500, language="python", baseline=None, prior_weight_K=200)
     assert g.project_percentile is None
     assert g.weight == 0.0
     assert g.percentile == g.seed_percentile
 
 
 def test_blend_weights_project_by_n_over_n_plus_k():
-    bl = Baseline(n=100, values={"composite": [1] * 99 + [10_000]})
+    bl = Baseline(n=100, dist=[1] * 99 + [10_000])
     # value 5000 sits above the 99 low observations, below the single high one, with no
     # ties -> project rank 99.0.
-    g = grade_value(5000, metric="composite", language="python",
-                    baseline=bl, prior_weight_K=100)
+    g = grade_value(5000, language="python", baseline=bl, prior_weight_K=100)
     assert g.weight == 0.5                        # n/(n+K) = 100/200
     assert g.project_percentile == 99.0
     expected = round(0.5 * 99.0 + 0.5 * g.seed_percentile, 2)
@@ -109,5 +106,5 @@ def test_persistence_round_trip(tmp_path):
     back = baseline.load_baseline(path)
     assert back is not None
     assert back.n == bl.n
-    assert back.values == bl.values
+    assert back.dist == bl.dist
     assert baseline.load_baseline(str(tmp_path / "missing.json")) is None

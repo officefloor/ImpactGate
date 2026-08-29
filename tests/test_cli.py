@@ -63,7 +63,7 @@ def test_markdown_output(repo, capsys):
     out = capsys.readouterr().out
     assert code == 0
     assert "## Change impact: 2" in out
-    assert "| metric | value |" in out
+    assert "| field | value |" in out
     assert "Top cost drivers" in out          # warn level shows drivers
 
 

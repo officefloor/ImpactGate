@@ -16,7 +16,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 
-from .data import METRICS, load_defaults
+from .data import load_defaults
 
 CONFIG_NAMES = (".impact-gate.yml", ".impact-gate.yaml")
 ENFORCEMENTS = ("off", "warn", "block")
@@ -29,7 +29,7 @@ _CURVE = _D["curve"]
 # The knobs an .impact-gate.yml / CLI flag may override, and their loaders. Absolute and
 # curve knobs share one path so a repo can set either mode's numbers in the same file.
 _SCALAR_KEYS = ("warn_at", "block_at", "enforcement", "tolerance", "measure_config",
-                "curve_enabled", "metric", "warn_percentile", "block_percentile",
+                "curve_enabled", "warn_percentile", "block_percentile",
                 "curve_prior_weight", "baseline_file")
 
 
@@ -41,8 +41,9 @@ class GateConfig:
     tolerance: float = _D["tolerance"]        # CI multiplier on both thresholds (>1 = looser)
     measure_config: str | None = None         # optional Surveyor-style YAML (ignore globs)
     # Grading curve (percentile-based). Consumed once baseline.py + the percentile gate land.
+    # The gate always scores the composite (change-level) impact; the mutation cost is a
+    # per-file signal used to rank which files to consider, not a rival gating metric.
     curve_enabled: bool = _CURVE["enabled"]           # gate on percentile vs absolute
-    metric: str = _CURVE["metric"]                    # composite | mutation
     warn_percentile: float = _CURVE["warn_percentile"]
     block_percentile: float = _CURVE["block_percentile"]
     curve_prior_weight: float = _CURVE["prior_weight_K"]  # K in w = n / (n + K)
@@ -90,8 +91,6 @@ class GateConfig:
                              f"{self.enforcement!r}")
         if self.tolerance <= 0:
             raise ValueError("tolerance must be > 0")
-        if self.metric not in METRICS:
-            raise ValueError(f"metric must be one of {METRICS}, got {self.metric!r}")
         for name in ("warn_percentile", "block_percentile"):
             p = getattr(self, name)
             if not 0 < p < 100:

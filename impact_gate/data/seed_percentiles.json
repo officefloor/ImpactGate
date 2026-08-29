@@ -1,27 +1,120 @@
 {
   "_meta": {
-    "provisional": true,
-    "note": "PLACEHOLDER tables. Replace `pooled` and `languages` with output from the corrected clean before-context corpus scan (top-level vendored dirs excluded). Keep this schema and the `percentiles` axis; only the numbers change. When you swap real numbers in, set provisional to false and fill `source`.",
+    "provisional": false,
     "metric": "composite",
     "measure": "before-context WMC",
-    "unit": "per-commit composite impact = (mutation + godclass) * files_changed",
-    "source": "PLACEHOLDER pending clean corpus scan of ~/Surveyor"
+    "unit": "per-commit composite impact = (Sigma mutation + Sigma godclass) * files_changed",
+    "source": "Clean before-context corpus scan of 20 OSS repos (~/scan, 2026-08-29), top-level vendored/generated dirs excluded. Per-commit non-merge observations touching >=1 source file; a commit is filed under the language of its highest-cost changed file. Languages with n<2000 observations fall back to the pooled table.",
+    "corpus_repos": 20,
+    "total_observations": 349165
   },
-  "percentiles": [50, 75, 90, 95, 98, 99],
+  "percentiles": [
+    50,
+    75,
+    90,
+    95,
+    98,
+    99
+  ],
   "pooled": {
-    "n": 0,
-    "values": [120, 480, 1600, 3800, 9500, 18000]
+    "n": 349165,
+    "values": [
+      2808,
+      32376,
+      274365,
+      1023748,
+      4930693,
+      14479833
+    ]
   },
   "languages": {
-    "python":     { "n": 0, "values": [90,  360, 1200, 2900, 7000, 13000] },
-    "java":       { "n": 0, "values": [150, 600, 2000, 4800, 12000, 22000] },
-    "javascript": { "n": 0, "values": [100, 400, 1400, 3300, 8200, 15500] },
-    "typescript": { "n": 0, "values": [110, 430, 1500, 3500, 8700, 16500] },
-    "go":         { "n": 0, "values": [80,  320, 1100, 2600, 6400, 12000] },
-    "csharp":     { "n": 0, "values": [140, 560, 1900, 4500, 11000, 20500] },
-    "cpp":        { "n": 0, "values": [160, 640, 2100, 5000, 12500, 23500] },
-    "c":          { "n": 0, "values": [130, 520, 1750, 4200, 10500, 19500] },
-    "ruby":       { "n": 0, "values": [85,  340, 1150, 2750, 6800, 12800] },
-    "rust":       { "n": 0, "values": [105, 420, 1450, 3400, 8500, 16000] }
+    "python": {
+      "n": 121128,
+      "values": [
+        1956,
+        18034,
+        113191,
+        340181,
+        1221525,
+        3116935
+      ]
+    },
+    "java": {
+      "n": 116663,
+      "values": [
+        1536,
+        21576,
+        200367,
+        782002,
+        3888534,
+        11755119
+      ]
+    },
+    "typescript": {
+      "n": 61700,
+      "values": [
+        4594,
+        42944,
+        290914,
+        872002,
+        2998780,
+        6653046
+      ]
+    },
+    "csharp": {
+      "n": 18816,
+      "values": [
+        14558,
+        222106,
+        2188540,
+        8302052,
+        37141443,
+        107186433
+      ]
+    },
+    "javascript": {
+      "n": 11933,
+      "values": [
+        14380,
+        324216,
+        4971922,
+        20409314,
+        86210976,
+        238154394
+      ]
+    },
+    "c": {
+      "n": 9915,
+      "values": [
+        27468,
+        191882,
+        1148946,
+        3526840,
+        14816807,
+        45066286
+      ]
+    },
+    "scala": {
+      "n": 4720,
+      "values": [
+        18470,
+        283960,
+        2461280,
+        7622635,
+        23232808,
+        51698271
+      ]
+    },
+    "go": {
+      "n": 3478,
+      "values": [
+        16779,
+        147153,
+        1008750,
+        3631168,
+        17143725,
+        59416058
+      ]
+    }
   }
 }

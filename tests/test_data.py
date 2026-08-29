@@ -50,8 +50,6 @@ def test_gateconfig_defaults_come_from_json():
 
 def test_validate_rejects_bad_curve_knobs():
     with pytest.raises(ValueError):
-        GateConfig(metric="bogus").validate()
-    with pytest.raises(ValueError):
         GateConfig(warn_percentile=0).validate()
     with pytest.raises(ValueError):
         GateConfig(warn_percentile=95, block_percentile=90).validate()
@@ -62,8 +60,8 @@ def test_validate_rejects_bad_curve_knobs():
 def test_config_file_overrides_curve_knobs(tmp_path):
     (tmp_path / ".impact-gate.yml").write_text(
         "curve_enabled: true\nwarn_percentile: 80\nblock_percentile: 95\n"
-        "curve_prior_weight: 100\nmetric: mutation\n")
+        "curve_prior_weight: 100\n")
     cfg = GateConfig.load(repo_path=str(tmp_path))
     assert cfg.curve_enabled is True
     assert cfg.warn_percentile == 80 and cfg.block_percentile == 95
-    assert cfg.curve_prior_weight == 100 and cfg.metric == "mutation"
+    assert cfg.curve_prior_weight == 100

@@ -20,8 +20,6 @@ import json
 from functools import lru_cache
 from importlib import resources
 
-METRICS = ("composite", "mutation")
-
 
 def _read(name: str) -> dict:
     with resources.files(__package__).joinpath(name).open(encoding="utf-8") as fh:

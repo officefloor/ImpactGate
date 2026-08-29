@@ -14,8 +14,10 @@ One observation = one atomic landed change:
     child MR recurses, and a merge that only syncs the parent/main branch in is skipped.
 A merge is never scored as its own diff, so a long-running roll-up cannot inflate things.
 
-Each observation carries two metrics: composite = (Σ mutation + Σ godclass) * files, and
-mutation = Σ mutation. The distribution of these over all observations is the baseline.
+Each observation is one composite impact = (Σ mutation + Σ godclass) * files. The
+distribution of that over all observations is the baseline. The gate always grades the
+composite; mutation cost stays a per-file ranking signal (report side), never a rival
+distribution to gate against.
 
 Grading. A change's grade blends its percentile rank in this project distribution (n
 observations) with its rank against the per-language seed table, weighting the project by
@@ -35,9 +37,6 @@ from .core.gitplumb import GitRepo
 from .data import load_defaults, rank_in_table, seed_table
 from .engine import score_change
 
-# curve metric -> the ChangeScore attribute that carries it.
-METRIC_ATTR = {"composite": "impact", "mutation": "mutation"}
-
 _BD = load_defaults().get("baseline", {})
 
 
@@ -45,26 +44,26 @@ _BD = load_defaults().get("baseline", {})
 
 @dataclass
 class Baseline:
-    """The project's per-metric per-observation distributions (each ascending)."""
+    """The project's composite per-observation distribution (ascending)."""
     n: int
-    values: dict[str, list[int]] = field(default_factory=dict)
+    dist: list[int] = field(default_factory=list)
     head: str | None = None
     base_ref: str | None = None
 
-    def rank(self, metric: str, value: float) -> float:
-        return _percentile_rank(self.values.get(metric, []), value)
+    def rank(self, value: float) -> float:
+        return _percentile_rank(self.dist, value)
 
     def to_dict(self) -> dict:
         return {"_meta": {"tool": "impact-gate", "n": self.n, "head": self.head,
                           "base_ref": self.base_ref},
-                "metrics": self.values}
+                "distribution": self.dist}
 
     @classmethod
     def from_dict(cls, d: dict) -> "Baseline":
         meta = d.get("_meta", {})
-        values = {k: [int(v) for v in vs] for k, vs in (d.get("metrics") or {}).items()}
-        n = int(meta.get("n", len(next(iter(values.values()), []))))
-        return cls(n=n, values=values, head=meta.get("head"),
+        dist = [int(v) for v in (d.get("distribution") or [])]
+        n = int(meta.get("n", len(dist)))
+        return cls(n=n, dist=dist, head=meta.get("head"),
                    base_ref=meta.get("base_ref"))
 
 
@@ -97,7 +96,6 @@ def build_baseline(repo_path: str, mcfg: MeasureConfig | None = None, *,
     mainline = gitio.mainline_commits(repo_path, base_ref, max_commits)
     repo = GitRepo(repo_path)
     comp: list[int] = []
-    mut: list[int] = []
     seen: set[str] = set()
 
     def emit(old_rev: str, new_rev: str) -> None:
@@ -105,7 +103,6 @@ def build_baseline(repo_path: str, mcfg: MeasureConfig | None = None, *,
         if score.empty:
             return
         comp.append(score.impact)
-        mut.append(score.mutation)
 
     def walk_mr(merge_sha: str, p1: str, tip: str) -> None:
         if merge_sha in seen:
@@ -143,8 +140,7 @@ def build_baseline(repo_path: str, mcfg: MeasureConfig | None = None, *,
         repo.close()
 
     comp.sort()
-    mut.sort()
-    return Baseline(n=len(comp), values={"composite": comp, "mutation": mut},
+    return Baseline(n=len(comp), dist=comp,
                     head=gitio.head_sha(repo_path, base_ref), base_ref=base_ref)
 
 
@@ -169,8 +165,7 @@ def load_baseline(path: str) -> Baseline | None:
 @dataclass
 class Grade:
     percentile: float            # the blended grade, 0..100
-    metric: str
-    value: int
+    value: int                   # the composite impact that was graded
     seed_percentile: float       # rank against the shipped per-language seed
     project_percentile: float | None   # rank against project history (None at cold start)
     weight: float                # w = n / (n + K): the project's share of the blend
@@ -187,24 +182,27 @@ def dominant_language(score) -> str | None:
     return best
 
 
-def grade_value(value: int, *, metric: str, language: str | None,
+def grade_value(value: int, *, language: str | None,
                 baseline: Baseline | None, prior_weight_K: float) -> Grade:
     seed_pct, seed_vals = seed_table(language)
     seed_rank = rank_in_table(value, seed_pct, seed_vals)
     n = baseline.n if baseline else 0
     if n <= 0:
-        return Grade(seed_rank, metric, value, seed_rank, None, 0.0, 0, language)
-    project_rank = baseline.rank(metric, value)
+        return Grade(seed_rank, value, seed_rank, None, 0.0, 0, language)
+    project_rank = baseline.rank(value)
     denom = n + prior_weight_K
     w = n / denom if denom > 0 else 1.0
     blended = round(w * project_rank + (1 - w) * seed_rank, 2)
-    return Grade(blended, metric, value, round(seed_rank, 2), round(project_rank, 2),
+    return Grade(blended, value, round(seed_rank, 2), round(project_rank, 2),
                  round(w, 4), n, language)
 
 
-def grade_change(score, *, metric: str = "composite", baseline: Baseline | None = None,
+def grade_change(score, *, baseline: Baseline | None = None,
                  prior_weight_K: float = 200) -> Grade:
-    """Grade a scored change by blending its project and seed percentile ranks."""
-    value = getattr(score, METRIC_ATTR[metric])
-    return grade_value(value, metric=metric, language=dominant_language(score),
+    """Grade a scored change by blending its project and seed percentile ranks.
+
+    The graded value is always the composite impact; the seed table is picked by the
+    change's dominant language.
+    """
+    return grade_value(score.impact, language=dominant_language(score),
                        baseline=baseline, prior_weight_K=prior_weight_K)
