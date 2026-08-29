@@ -58,7 +58,6 @@ warn_at: 50000          # impact above which to warn
 block_at: 200000        # impact above which to block
 enforcement: warn       # off, warn, or block. Start on warn. Flip to block when ready.
 tolerance: 1.0          # CI-adjustable multiplier on both thresholds. Above 1 is more lenient.
-wmc_context: before     # measure definition. Uses the pre-change container. This is canonical.
 # measure_config: .impact-measure.yml   # optional: ignore globs and language overrides
 ```
 

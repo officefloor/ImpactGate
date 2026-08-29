@@ -1,0 +1,31 @@
+{
+  "_meta": {
+    "note": "Default gate and grading-curve constants, single-sourced here so tuning is a config edit, not a code change. GateConfig reads these as its built-in defaults; an .impact-gate.yml and CLI flags still override per-repo.",
+    "provisional": true
+  },
+
+  "enforcement": "warn",
+  "tolerance": 1.0,
+
+  "absolute": {
+    "note": "Absolute composite-impact thresholds. Used when the curve is off, and as the fallback before a project baseline exists. null = that threshold is not set.",
+    "warn_at": null,
+    "block_at": null
+  },
+
+  "curve": {
+    "note": "Percentile-based grading. When enabled, a change is graded by its percentile against the blended (seed + project) distribution instead of a raw number. The graded value is always the composite (change-level) impact; per-file mutation cost is a ranking signal, not a rival gating metric.",
+    "enabled": false,
+    "warn_percentile": 90,
+    "block_percentile": 98,
+    "prior_weight_K": 200,
+    "baseline_file": ".impact-gate-baseline.json"
+  },
+
+  "baseline": {
+    "note": "How the merged history becomes the per-commit distribution. Walk the first-parent mainline of the merged base branch (only landed work; in-flight branches are never reached). One observation per atomic landed change: a main non-merge commit (its own diff); a leaf MR (net branch-start..tip); a parent MR's direct commits netted per run between merges, each based at the preceding synced base, with child MRs recursing and parent/main syncs skipped. A merge is never scored as its own diff, so a long-running roll-up cannot inflate the numbers. exclude_subject_pattern skips an MR by its merge-commit subject; max_commits caps how many recent mainline commits are walked.",
+    "base_ref": "main",
+    "exclude_subject_pattern": null,
+    "max_commits": null
+  }
+}

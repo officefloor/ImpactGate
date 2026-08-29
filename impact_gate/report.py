@@ -10,6 +10,14 @@ _MODE_DESC = {"range": "vs {base} (merge-base..HEAD)",
               "staged": "staged vs HEAD", "worktree": "working tree vs HEAD"}
 
 
+def _unit_parts(u) -> tuple[str, str]:
+    """(container, short_name) for a unit. "Owner::addOwner" -> ("Owner", "addOwner");
+    a free function keeps its name and reports container "" (file scope). The class is
+    what you look at when a driver is heavy, so the reports show it beside the method."""
+    short = u.name.rpartition("::")[2] if "::" in u.name else u.name
+    return u.container, short
+
+
 def _thresholds_note(cfg: GateConfig) -> str:
     w, b = cfg.effective_warn(), cfg.effective_block()
     parts = []
@@ -31,20 +39,28 @@ def render_text(score: ChangeScore, cfg: GateConfig, level: str,
     desc = _MODE_DESC[mode].format(base=base)
     lines = [
         f"Change impact: {score.impact:,}   [{tag}]{_thresholds_note(cfg)}",
-        f"  files changed: {score.files_changed}   "
-        f"mutation: {score.mutation:,}   new code: {score.godclass:,}   "
-        f"({desc}, wmc-context: {cfg.wmc_context})",
+        f"  files changed: {score.files_changed}   ({desc})",
     ]
     if level == "block" and not blocked:
         lines.append("  note: over the block threshold. This will fail once "
                      "enforcement is set to 'block'.")
+    ranked = [f for f in score.files if f.cost > 0]
+    if ranked:
+        lines.append("")
+        lines.append("Files to consider for refactoring (by change-impact cost):")
+        for f in ranked[:5]:
+            lines.append(f"  {f.cost:>12,}  {f.path}  "
+                         f"(existing {f.mutation:,}, new {f.godclass:,}; "
+                         f"{f.mut_fns} fns changed, {f.new_fns} new)")
     if level != "ok" and score.units:
         lines.append("")
         lines.append("Top cost drivers. Simplify or refactor these:")
         for u in score.units[:5]:
-            loc = f"{u.path}:{u.name}" if u.name else u.path
+            container, short = _unit_parts(u)
+            loc = f"{u.path}:{short}" if short else u.path
+            where = f"in {container}" if container else "file scope"
             lines.append(f"  {u.cost:>12,}  {loc}  "
-                         f"(CC {u.cc}, WMC_other {u.wmc_other}, {u.kind})")
+                         f"({where}, CC {u.cc}, WMC_other {u.wmc_other}, {u.kind})")
     return "\n".join(lines)
 
 
@@ -55,11 +71,8 @@ def render_json(score: ChangeScore, cfg: GateConfig, level: str,
         "level": level,
         "blocked": blocked,
         "files_changed": score.files_changed,
-        "mutation": score.mutation,
-        "godclass": score.godclass,
         "mode": mode,
         "base": base,
-        "wmc_context": cfg.wmc_context,
         "thresholds": {
             "warn": cfg.effective_warn(),
             "block": cfg.effective_block(),
@@ -86,26 +99,35 @@ def render_markdown(score: ChangeScore, cfg: GateConfig, level: str,
     lines = [
         f"## Change impact: {score.impact:,}  {verdict}",
         "",
-        "| metric | value |",
+        "| field | value |",
         "|---|---|",
         f"| files changed | {score.files_changed} |",
-        f"| mutation (disturbing existing code) | {score.mutation:,} |",
-        f"| new code | {score.godclass:,} |",
     ]
     w, b = cfg.effective_warn(), cfg.effective_block()
     if w is not None:
         lines.append(f"| warn threshold | {int(w):,} |")
     if b is not None:
         lines.append(f"| block threshold | {int(b):,} |")
-    lines.append(f"| scope | {desc}, wmc-context {cfg.wmc_context} |")
+    lines.append(f"| scope | {desc} |")
     if level == "block" and not blocked:
         lines += ["", "> Over the block threshold. This will fail once enforcement "
                   "is set to `block`."]
+    ranked = [f for f in score.files if f.cost > 0]
+    if ranked:
+        lines += ["", "### Files to consider for refactoring", "",
+                  "| cost | file | existing | new | fns changed | fns new |",
+                  "|---|---|---|---|---|---|"]
+        for f in ranked[:5]:
+            lines.append(f"| {f.cost:,} | `{f.path}` | {f.mutation:,} | "
+                         f"{f.godclass:,} | {f.mut_fns} | {f.new_fns} |")
     if level != "ok" and score.units:
         lines += ["", "### Top cost drivers. Simplify or refactor these.", "",
-                  "| cost | location | CC | WMC_other | kind |",
-                  "|---|---|---|---|---|"]
+                  "| cost | location | class | CC | WMC_other | kind |",
+                  "|---|---|---|---|---|---|"]
         for u in score.units[:5]:
-            loc = f"`{u.path}:{u.name}`" if u.name else f"`{u.path}`"
-            lines.append(f"| {u.cost:,} | {loc} | {u.cc} | {u.wmc_other} | {u.kind} |")
+            container, short = _unit_parts(u)
+            loc = f"`{u.path}:{short}`" if short else f"`{u.path}`"
+            cls = f"`{container}`" if container else "_file scope_"
+            lines.append(f"| {u.cost:,} | {loc} | {cls} | {u.cc} | {u.wmc_other} | "
+                         f"{u.kind} |")
     return "\n".join(lines)

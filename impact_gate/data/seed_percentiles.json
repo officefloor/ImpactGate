@@ -1,0 +1,120 @@
+{
+  "_meta": {
+    "provisional": false,
+    "metric": "composite",
+    "measure": "before-context WMC",
+    "unit": "per-commit composite impact = (Sigma mutation + Sigma godclass) * files_changed",
+    "source": "Clean before-context corpus scan of 20 OSS repos (~/scan, 2026-08-29), top-level vendored/generated dirs excluded. Per-commit non-merge observations touching >=1 source file; a commit is filed under the language of its highest-cost changed file. Languages with n<2000 observations fall back to the pooled table.",
+    "corpus_repos": 20,
+    "total_observations": 349165
+  },
+  "percentiles": [
+    50,
+    75,
+    90,
+    95,
+    98,
+    99
+  ],
+  "pooled": {
+    "n": 349165,
+    "values": [
+      2808,
+      32376,
+      274365,
+      1023748,
+      4930693,
+      14479833
+    ]
+  },
+  "languages": {
+    "python": {
+      "n": 121128,
+      "values": [
+        1956,
+        18034,
+        113191,
+        340181,
+        1221525,
+        3116935
+      ]
+    },
+    "java": {
+      "n": 116663,
+      "values": [
+        1536,
+        21576,
+        200367,
+        782002,
+        3888534,
+        11755119
+      ]
+    },
+    "typescript": {
+      "n": 61700,
+      "values": [
+        4594,
+        42944,
+        290914,
+        872002,
+        2998780,
+        6653046
+      ]
+    },
+    "csharp": {
+      "n": 18816,
+      "values": [
+        14558,
+        222106,
+        2188540,
+        8302052,
+        37141443,
+        107186433
+      ]
+    },
+    "javascript": {
+      "n": 11933,
+      "values": [
+        14380,
+        324216,
+        4971922,
+        20409314,
+        86210976,
+        238154394
+      ]
+    },
+    "c": {
+      "n": 9915,
+      "values": [
+        27468,
+        191882,
+        1148946,
+        3526840,
+        14816807,
+        45066286
+      ]
+    },
+    "scala": {
+      "n": 4720,
+      "values": [
+        18470,
+        283960,
+        2461280,
+        7622635,
+        23232808,
+        51698271
+      ]
+    },
+    "go": {
+      "n": 3478,
+      "values": [
+        16779,
+        147153,
+        1008750,
+        3631168,
+        17143725,
+        59416058
+      ]
+    }
+  }
+}

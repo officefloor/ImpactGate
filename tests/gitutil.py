@@ -49,10 +49,9 @@ def stage(repo, rel: str, content: str) -> None:
     git(repo, "add", rel)
 
 
-def score(repo, mode: str = "worktree", base: str = "main",
-          wmc_context: str = "before"):
+def score(repo, mode: str = "worktree", base: str = "main"):
     changed = gitio.changed_files(str(repo), mode, base)
-    return engine.score_change(changed, wmc_context=wmc_context)
+    return engine.score_change(changed)
 
 
 def cc_func(name: str, branches: int) -> str:

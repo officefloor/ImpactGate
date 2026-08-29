@@ -21,6 +21,9 @@ MODES = ("range", "staged", "worktree")
 
 _DIFF = ["diff", "-U0", "-M", "--no-color", "--no-ext-diff", "--find-renames"]
 
+# git's canonical empty-tree object; the "parent" a root commit is diffed against.
+EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
+
 
 class DiffError(RuntimeError):
     """A change could not be resolved (e.g. no merge-base — shallow clone)."""
@@ -112,3 +115,75 @@ def changed_files(repo_path: str, mode: str = "staged",
         return out
     finally:
         repo.close()
+
+
+# ---- history walk (for the project baseline) -----------------------------------
+
+def head_sha(repo_path: str, rev: str = "HEAD") -> str:
+    return _git(repo_path, "rev-parse", rev).strip()
+
+
+def merge_base(repo_path: str, a: str, b: str) -> str | None:
+    """Public alias: the best common ancestor (branch-start point) of two revs."""
+    return _merge_base(repo_path, a, b)
+
+
+def is_ancestor(repo_path: str, ancestor: str, descendant: str) -> bool:
+    """True if `ancestor` is reachable from `descendant` — used to tell a child MR
+    (feature merged into the branch) from a sync (parent/main merged into the branch)."""
+    r = subprocess.run(["git", "-C", repo_path, "merge-base", "--is-ancestor",
+                        ancestor, descendant], capture_output=True)
+    return r.returncode == 0
+
+
+def rev_parents(repo_path: str, rev: str = "HEAD") -> dict[str, list[str]]:
+    """Map every commit reachable from `rev` -> its parent SHAs (first parent first)."""
+    out = _git(repo_path, "rev-list", "--parents", rev)
+    parents: dict[str, list[str]] = {}
+    for line in out.split("\n"):
+        if not line:
+            continue
+        shas = line.split()
+        parents[shas[0]] = shas[1:]
+    return parents
+
+
+def mainline_commits(repo_path: str, rev: str = "HEAD",
+                     max_commits: int | None = None) -> list[str]:
+    """The first-parent spine of `rev`, newest first (the landed-changes mainline)."""
+    args = ["rev-list", "--first-parent"]
+    if max_commits is not None:
+        args += ["-n", str(max_commits)]
+    args.append(rev)
+    return [s for s in _git(repo_path, *args).split("\n") if s]
+
+
+def first_parent_spine(repo_path: str, start: str, tip: str) -> list[str]:
+    """Commits on `tip`'s first-parent chain back to but excluding `start`
+    (newest first). This is one branch's own line of commits."""
+    out = _git(repo_path, "rev-list", "--first-parent", f"{start}..{tip}")
+    return [s for s in out.split("\n") if s]
+
+
+def commit_subject(repo_path: str, rev: str) -> str:
+    return _git(repo_path, "log", "-1", "--format=%s", rev).strip()
+
+
+def diff_between(repo: GitRepo, old_rev: str, new_rev: str) -> list[ChangedFile]:
+    """The `ChangedFile`s of the net diff old_rev..new_rev, with before/after bytes.
+
+    Shares the -U0 rename-aware diff and blob streaming used by the live modes, so a
+    historical range is scored exactly as the same change would be today. `old_rev` may
+    be EMPTY_TREE to score a root commit's whole content as added.
+    """
+    out: list[ChangedFile] = []
+    for d in repo.diff(old_rev, new_rev):
+        if d.is_binary:
+            continue
+        new_path = d.new_path or d.old_path or ""
+        old_path = d.old_path or new_path
+        before = None if d.status == "A" else _blob_bytes(repo, old_rev, old_path)
+        after = None if d.status == "D" else _blob_bytes(repo, new_rev, new_path)
+        out.append(ChangedFile(path=new_path, status=d.status, before=before,
+                               after=after, added=d.added, removed=d.removed))
+    return out

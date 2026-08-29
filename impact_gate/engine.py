@@ -83,8 +83,8 @@ def _parse(mcfg: MeasureConfig, path: str, data: bytes | None):
     return src, units
 
 
-def score_change(changed: list[ChangedFile], mcfg: MeasureConfig | None = None,
-                 wmc_context: str = "before") -> ChangeScore:
+def score_change(changed: list[ChangedFile],
+                 mcfg: MeasureConfig | None = None) -> ChangeScore:
     """Compute the change-impact of a set of changed files.
 
     Only source files with an impact-bearing status count, `files_changed` is the
@@ -105,7 +105,7 @@ def score_change(changed: list[ChangedFile], mcfg: MeasureConfig | None = None,
             continue
         fi = compute_file_impact(
             before_units, after_units, before_src, after_src,
-            c.added, c.removed, mcfg.rename_jaccard, wmc_context,
+            c.added, c.removed, mcfg.rename_jaccard,
         )
         total_mut += fi.mutation_cost
         total_god += fi.godclass_cost
