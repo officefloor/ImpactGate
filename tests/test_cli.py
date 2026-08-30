@@ -143,6 +143,25 @@ def test_curve_low_change_passes_and_reports_the_grade(repo, capsys):
     assert 0 <= data["grade"]["percentile"] <= 100
 
 
+def test_curve_prior_weight_zero_grades_purely_against_baseline(repo, capsys):
+    # --curve-prior-weight 0 overrides the default K so the grade is the baseline
+    # percentile alone (weight 1.0), with the shipped seed ignored — the flag the
+    # gate uses to grade a change against a chosen reference distribution.
+    _history(repo)
+    main(["baseline", "--repo", str(repo)])
+    capsys.readouterr()
+    write(repo, "b.py", cc_func("c", 5) + cc_func("z", 2))
+    code = main(["score", "--repo", str(repo), "--mode", "worktree", "--curve",
+                 "--curve-prior-weight", "0", "--format", "json"])
+    data = json.loads(capsys.readouterr().out)
+    g = data["grade"]
+    assert code == 0
+    assert g["n"] == 3
+    assert g["weight"] == 1.0
+    assert g["project_percentile"] is not None
+    assert g["percentile"] == g["project_percentile"]    # pure baseline; seed ignored
+
+
 def test_curve_without_baseline_grades_on_seed_only(repo, capsys):
     _prepare(repo)                                        # no baseline file built
     code = main(["score", "--repo", str(repo), "--mode", "worktree", "--curve",
