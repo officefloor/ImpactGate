@@ -46,11 +46,17 @@ def _add_score_args(p: argparse.ArgumentParser) -> None:
                         ".impact-gate-baseline.json)")
     p.add_argument("--warn-percentile", dest="warn_percentile", type=float)
     p.add_argument("--block-percentile", dest="block_percentile", type=float)
+    p.add_argument("--curve-prior-weight", dest="curve_prior_weight", type=float,
+                   help="K in the empirical-Bayes blend w = n/(n+K) between the project "
+                        "baseline and the shipped seed. 0 grades PURELY against the "
+                        "--baseline-file distribution (ignore the seed); large K leans on "
+                        "the seed. Default from config (200).")
 
 
 # Gate knobs an argparse flag may override on top of the config file, when given.
 _OVERRIDE_ATTRS = ("warn_at", "block_at", "enforcement", "tolerance", "measure_config",
-                   "curve_enabled", "baseline_file", "warn_percentile", "block_percentile")
+                   "curve_enabled", "baseline_file", "warn_percentile", "block_percentile",
+                   "curve_prior_weight")
 
 
 def _resolve_config(args) -> GateConfig:
