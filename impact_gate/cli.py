@@ -15,7 +15,7 @@ import sys
 
 from .core.config import MeasureConfig
 
-from . import __version__, baseline, gitio, report
+from . import __version__, baseline, gitio, providers, report
 from .config import ENFORCEMENTS, GateConfig
 from .engine import score_change
 
@@ -54,7 +54,9 @@ _OVERRIDE_ATTRS = ("warn_at", "block_at", "enforcement", "tolerance", "measure_c
 
 
 def _resolve_config(args) -> GateConfig:
-    cfg = GateConfig.load(args.config, args.repo)
+    # Base policy from the policy port (local .impact-gate.yml today); CLI flags are the
+    # outermost layer and win over whatever the provider supplied.
+    cfg = providers.select_policy_provider(args.config, args.repo).policy(args.repo)
     for attr in _OVERRIDE_ATTRS:
         val = getattr(args, attr, None)
         if val is not None:
@@ -76,9 +78,11 @@ def _cmd_score(args) -> int:
 
     grade = None
     if cfg.curve_enabled:
-        bl = baseline.load_baseline(os.path.join(args.repo, cfg.baseline_file))
-        grade = baseline.grade_change(score, baseline=bl,
-                                      prior_weight_K=cfg.curve_prior_weight)
+        grades = providers.select_grade_provider(args.repo, cfg.baseline_file,
+                                                 cfg.curve_prior_weight)
+        grade = grades.grade(providers.ChangeSummary.of(score), args.repo)
+        if grade is None:                    # backend unreachable -> shipped-seed only
+            grade = providers.seed_grade(score, cfg.curve_prior_weight)
         level = cfg.level_for_grade(grade.percentile)
         blocked = cfg.blocks_grade(grade.percentile)
     else:
@@ -120,7 +124,8 @@ def _cmd_baseline(args) -> int:
               "baseline. Check --base-ref points at a branch with history.",
               file=sys.stderr)
         return 1
-    baseline.save_baseline(bl, out_path)
+    providers.select_grade_provider(args.repo, cfg.baseline_file,
+                                    cfg.curve_prior_weight).publish(args.repo, bl)
     print(f"impact-gate: baseline written to {out_path} "
           f"({bl.n} observations from '{bl.base_ref}').")
     return 0
