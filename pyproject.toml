@@ -12,7 +12,13 @@ requires-python = ">=3.10"
 # lizard is the only runtime dependency (multi-language CC + line ranges); PyYAML is
 # used only when an .impact-gate.yml config is present.
 dependencies = [
-    "lizard>=1.17",
+    # 1.24.0 is EXCLUDED: its Java state machine loses the second `@` when a bare
+    # annotation is followed by a parenthesised one at class level (`@Entity` then
+    # `@Table(...)`), so the file parses to ZERO functions and every change to a
+    # Spring/JPA entity, repository or controller silently scores impact 0. See
+    # tests/test_java_annotations.py, which asserts the behaviour for whatever
+    # version resolves here.
+    "lizard>=1.17,!=1.24.0",
     "PyYAML>=6",
 ]
 
