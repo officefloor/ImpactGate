@@ -98,6 +98,17 @@ def test_blend_weights_project_by_n_over_n_plus_k():
     assert g.percentile == expected
 
 
+def test_prior_weight_zero_grades_purely_against_the_project():
+    # K=0 => w = n/(n+0) = 1.0: the grade is the project percentile alone, the seed
+    # ignored. This is the mode that grades a change against a chosen reference
+    # distribution (e.g. another project's) rather than the shipped corpus.
+    bl = Baseline(n=100, dist=[1] * 99 + [10_000])
+    g = grade_value(5000, language="python", baseline=bl, prior_weight_K=0)
+    assert g.weight == 1.0
+    assert g.project_percentile == 99.0
+    assert g.percentile == g.project_percentile        # pure project; seed contributes nothing
+
+
 def test_persistence_round_trip(tmp_path):
     repo = _history(tmp_path)
     bl = baseline.build_baseline(str(repo), base_ref="main")
