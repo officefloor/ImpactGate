@@ -59,6 +59,11 @@ def render_text(score: ChangeScore, cfg: GateConfig, level: str,
     if grade is not None:
         lines.append(_grade_line(grade, cfg))
     lines.append(f"  files changed: {score.files_changed}   ({desc})")
+    if score.skipped:
+        lines.append(f"  skipped {len(score.skipped)} oversized file(s), not scored "
+                     "(diff over max_diff_lines; likely generated or vendored):")
+        for s in score.skipped:
+            lines.append(f"    {s.path}  ({s.diff_lines:,} diff lines)")
     if level == "block" and not blocked:
         lines.append("  note: over the block threshold. This will fail once "
                      "enforcement is set to 'block'.")
@@ -105,6 +110,8 @@ def render_json(score: ChangeScore, cfg: GateConfig, level: str,
         "files": [{"path": f.path, "lang": f.lang, "cost": f.cost,
                    "mutation": f.mutation, "godclass": f.godclass,
                    "mut_fns": f.mut_fns, "new_fns": f.new_fns} for f in score.files],
+        "skipped": [{"path": s.path, "diff_lines": s.diff_lines}
+                    for s in score.skipped],
         "top_units": [{"path": u.path, "name": u.name, "container": u.container,
                        "cc": u.cc, "wmc_other": u.wmc_other, "cost": u.cost,
                        "kind": u.kind} for u in score.units[:10]],
@@ -149,9 +156,17 @@ def render_markdown(score: ChangeScore, cfg: GateConfig, level: str,
         if b is not None:
             lines.append(f"| block threshold | {int(b):,} |")
     lines.append(f"| scope | {desc} |")
+    if score.skipped:
+        lines.append(f"| skipped (oversized, not scored) | {len(score.skipped)} |")
     if level == "block" and not blocked:
         lines += ["", "> Over the block threshold. This will fail once enforcement "
                   "is set to `block`."]
+    if score.skipped:
+        lines += ["", "### Skipped: oversized files, not scored", "",
+                  "Diff over `max_diff_lines` (likely generated or vendored).", "",
+                  "| file | diff lines |", "|---|---|"]
+        for s in score.skipped:
+            lines.append(f"| `{s.path}` | {s.diff_lines:,} |")
     ranked = [f for f in score.files if f.cost > 0]
     if ranked:
         lines += ["", "### Files to consider for refactoring", "",

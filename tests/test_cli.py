@@ -4,7 +4,7 @@ import os
 
 from impact_gate import cli, glapi
 from impact_gate.cli import main
-from gitutil import cc_func, commit, write
+from gitutil import cc_func, commit, stage, write
 
 BASE = "def f():\n    return 1\n"
 CHANGED = "def f():\n    return 1\n\ndef g():\n    return 2\n"
@@ -211,3 +211,60 @@ def test_detect_provider_defaults_to_github(monkeypatch):
     for k in ("GITLAB_CI", "CI_MERGE_REQUEST_IID"):
         monkeypatch.delenv(k, raising=False)
     assert cli._detect_provider() == "github"
+
+
+# ------------------------------------------------------------------ install-hook
+
+def _hook_path(repo):
+    return os.path.join(str(repo), ".git", "hooks", "pre-commit")
+
+
+def test_install_hook_writes_executable_hook(repo, capsys):
+    code = main(["install-hook", "--repo", str(repo)])
+    assert code == 0
+    hook = _hook_path(repo)
+    assert os.path.exists(hook) and os.access(hook, os.X_OK)
+    body = open(hook, encoding="utf-8").read()
+    assert "impact_gate" in body and "score --mode staged" in body
+    assert "installed pre-commit hook" in capsys.readouterr().out
+
+
+def test_install_hook_refuses_to_clobber_without_force(repo, capsys):
+    os.makedirs(os.path.dirname(_hook_path(repo)), exist_ok=True)
+    open(_hook_path(repo), "w").write("#existing\n")
+    code = main(["install-hook", "--repo", str(repo)])
+    assert code == 1
+    assert "already exists" in capsys.readouterr().err
+    assert open(_hook_path(repo)).read() == "#existing\n"    # left untouched
+
+
+def test_install_hook_force_overwrites(repo):
+    os.makedirs(os.path.dirname(_hook_path(repo)), exist_ok=True)
+    open(_hook_path(repo), "w").write("#existing\n")
+    code = main(["install-hook", "--repo", str(repo), "--force"])
+    assert code == 0
+    assert "impact_gate" in open(_hook_path(repo)).read()
+
+
+def test_install_hook_on_non_repo_errs_cleanly(tmp_path, capsys):
+    code = main(["install-hook", "--repo", str(tmp_path)])
+    assert code == 1
+    assert "not a git repository" in capsys.readouterr().err
+
+
+# --------------------------------------------------- bulk-commit guard (end to end)
+
+def test_bulk_guard_skips_oversized_staged_file(repo, tmp_path, capsys):
+    write(repo, "seed.py", "x = 1\n")
+    commit(repo, "seed")
+    big = "".join(f"def f{i}(x):\n    return {i}\n" for i in range(60))   # 120 lines
+    stage(repo, "gen.py", big)
+    mc = tmp_path / "measure.yml"
+    mc.write_text("max_diff_lines: 10\n")
+    code = main(["score", "--repo", str(repo), "--mode", "staged",
+                 "--measure-config", str(mc), "--format", "json"])
+    data = json.loads(capsys.readouterr().out)
+    assert code == 0
+    assert data["files_changed"] == 0
+    assert data["impact"] == 0
+    assert [s["path"] for s in data["skipped"]] == ["gen.py"]

@@ -67,6 +67,35 @@ of the impact. The change-level number gates; the per-file ranking points at whe
 decay is concentrating, so a file quietly growing into a god-class surfaces as a
 candidate before it blocks anything.
 
+A source file whose diff is larger than `max_diff_lines` (200,000 by default, in the
+measure config) is almost always a generated dump or a vendored blob. The gate skips it
+so it neither distorts the number nor slows scoring, and lists it under **skipped** so
+the result is never silently wrong.
+
+## Use as a git pre-commit hook
+
+Gate every commit locally, before CI:
+
+```bash
+# Installs .git/hooks/pre-commit. It scores the staged change on each commit.
+impact-gate install-hook
+```
+
+With `enforcement: block` in `.impact-gate.yml`, a commit whose impact is too high is
+blocked; on `warn` (or off) the report prints and the commit proceeds. Re-run with
+`--force` to overwrite an existing pre-commit hook.
+
+Prefer the [pre-commit](https://pre-commit.com) framework? This repo ships a hook
+definition — add to your `.pre-commit-config.yaml`:
+
+```yaml
+repos:
+  - repo: https://github.com/officefloor/ImpactGate
+    rev: v0.3.0
+    hooks:
+      - id: impact-gate
+```
+
 ## Grade against a distribution (the curve)
 
 A raw threshold is hard to set: a typical change's impact varies by orders of magnitude
@@ -185,4 +214,6 @@ container with the provider's token and env set.
   image for any CI, and a version-tagged Action (`@v0`). Done.
 - More CI plugins. A GitLab CI template and a Jenkins pipeline snippet, both wrapping the
   Docker image (`ci/gitlab-ci.yml`, `ci/Jenkinsfile`). GitLab posts a sticky MR note. Done.
-- Hooks and IDE. An `impact-gate install-hook` for pre-commit. Editor integration over LSP.
+- Hooks. `impact-gate install-hook` installs a git pre-commit hook, and a
+  `.pre-commit-hooks.yaml` supports the pre-commit framework. Done.
+- IDE. Editor integration over LSP, with a live gauge as you edit.

@@ -5,4 +5,4 @@ Surveyor / the PetClinic-Evolve harness). It scores a change against a base — 
 committed range vs `main`, staged changes, or the working tree — reports the number,
 and warns or blocks when the impact is too high.
 """
-__version__ = "0.2.0"
+__version__ = "0.3.0"

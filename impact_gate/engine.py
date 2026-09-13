@@ -60,6 +60,18 @@ class FileScore:
 
 
 @dataclass
+class SkippedFile:
+    """A source file left out of the score because its diff is pathologically large.
+
+    A generated dump or a vendored blob can be enormous; scoring it would distort the
+    impact number (and slow parsing) without measuring any real structural decay. The
+    gate skips it past `max_diff_lines` and surfaces it so the number is never silently
+    wrong."""
+    path: str
+    diff_lines: int
+
+
+@dataclass
 class ChangeScore:
     files_changed: int
     mutation: int
@@ -67,10 +79,13 @@ class ChangeScore:
     impact: int                    # composite = (mutation + godclass) * files_changed
     files: list[FileScore] = field(default_factory=list)
     units: list[UnitScore] = field(default_factory=list)   # sorted by cost, desc
+    skipped: list[SkippedFile] = field(default_factory=list)   # over max_diff_lines
 
     @property
     def empty(self) -> bool:
-        return self.files_changed == 0
+        # Nothing scored AND nothing skipped: a genuinely empty change. A change whose
+        # only source edits were skipped is not empty — the skip must still be reported.
+        return self.files_changed == 0 and not self.skipped
 
 
 def _parse(mcfg: MeasureConfig, path: str, data: bytes | None):
@@ -93,12 +108,24 @@ def score_change(changed: list[ChangedFile],
     mcfg = mcfg or MeasureConfig()
     src = [c for c in changed
            if c.status in IMPACT_STATUSES and mcfg.is_source(c.path)]
-    files_changed = len(src)
+
+    # Bulk-commit guard: a source file whose diff exceeds max_diff_lines is almost
+    # always a generated dump or a vendored blob. Skip it so it neither distorts the
+    # composite nor slows parsing; it is reported separately, not counted or scored.
+    skipped: list[SkippedFile] = []
+    scored: list[ChangedFile] = []
+    for c in src:
+        dl = sum(n for _, n in c.added) + sum(n for _, n in c.removed)
+        if mcfg.max_diff_lines and dl > mcfg.max_diff_lines:
+            skipped.append(SkippedFile(c.path, dl))
+        else:
+            scored.append(c)
+    files_changed = len(scored)
 
     total_mut = total_god = 0
     files: list[FileScore] = []
     units: list[UnitScore] = []
-    for c in src:
+    for c in scored:
         before_src, before_units = _parse(mcfg, c.path, c.before)
         after_src, after_units = _parse(mcfg, c.path, c.after)
         if not after_units and not before_units:
@@ -119,4 +146,5 @@ def score_change(changed: list[ChangedFile],
     files.sort(key=lambda f: f.cost, reverse=True)
     units.sort(key=lambda u: u.cost, reverse=True)
     composite = (total_mut + total_god) * files_changed
-    return ChangeScore(files_changed, total_mut, total_god, composite, files, units)
+    return ChangeScore(files_changed, total_mut, total_god, composite, files, units,
+                       skipped)

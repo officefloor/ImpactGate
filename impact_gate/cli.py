@@ -193,6 +193,39 @@ def _comment_gitlab(args, body: str) -> int:
     return 0
 
 
+_HOOK_TEMPLATE = """\
+#!/bin/sh
+# impact-gate pre-commit hook (installed by `impact-gate install-hook`).
+# Scores the staged change: a 'block' verdict (exit 2) aborts the commit, while ok/warn
+# (exit 0) let it proceed. Configure thresholds and enforcement in .impact-gate.yml.
+exec "{python}" -m impact_gate score --mode staged
+"""
+
+
+def _cmd_install_hook(args) -> int:
+    """Install a git pre-commit hook that scores staged changes and gates the commit."""
+    import stat
+    try:
+        rel = gitio._git(args.repo, "rev-parse", "--git-path", "hooks").strip()
+    except subprocess.CalledProcessError:
+        print(f"impact-gate: '{args.repo}' is not a git repository.", file=sys.stderr)
+        return 1
+    hooks_dir = rel if os.path.isabs(rel) else os.path.join(args.repo, rel)
+    os.makedirs(hooks_dir, exist_ok=True)
+    hook_path = os.path.join(hooks_dir, "pre-commit")
+    if os.path.exists(hook_path) and not args.force:
+        print(f"impact-gate: a pre-commit hook already exists at {hook_path}. Re-run "
+              "with --force to overwrite it.", file=sys.stderr)
+        return 1
+    with open(hook_path, "w", encoding="utf-8") as fh:
+        fh.write(_HOOK_TEMPLATE.format(python=sys.executable))
+    os.chmod(hook_path, os.stat(hook_path).st_mode
+             | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+    print(f"impact-gate: installed pre-commit hook at {hook_path}. It scores staged "
+          "changes; set 'enforcement: block' in .impact-gate.yml to block risky commits.")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(prog="impact-gate",
                                  description="Report and gate on the change-impact of a change.")
@@ -233,6 +266,13 @@ def main(argv: list[str] | None = None) -> int:
     c.add_argument("--token",
                    help="API token (default: $GITHUB_TOKEN, or $GITLAB_TOKEN for GitLab).")
     c.set_defaults(func=_cmd_comment)
+
+    h = sub.add_parser("install-hook",
+                       help="install a git pre-commit hook that gates staged changes")
+    h.add_argument("--repo", default=".", help="path to the git repo (default: .)")
+    h.add_argument("--force", action="store_true",
+                   help="overwrite an existing pre-commit hook")
+    h.set_defaults(func=_cmd_install_hook)
 
     args = ap.parse_args(argv)
     try:

@@ -1,0 +1,21 @@
+# pre-commit framework hook definition (https://pre-commit.com).
+#
+# Use it by adding to a project's .pre-commit-config.yaml:
+#
+#   repos:
+#     - repo: https://github.com/officefloor/ImpactGate
+#       rev: v0.3.0
+#       hooks:
+#         - id: impact-gate
+#
+# pre-commit installs impact-gate into an isolated environment and runs it in staged
+# mode on each commit. A 'block' verdict (exit 2) aborts the commit; ok/warn let it
+# proceed. Configure thresholds and enforcement in the project's .impact-gate.yml.
+- id: impact-gate
+  name: impact-gate
+  description: Gate the structural change-impact of the staged change.
+  entry: impact-gate score --mode staged
+  language: python
+  pass_filenames: false
+  always_run: true
+  require_serial: true
