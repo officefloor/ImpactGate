@@ -1,6 +1,6 @@
 """Self-contained structural change-impact core.
 
-Vendored so the tool is standalone — no dependency on the (concluded) Surveyor
+Vendored so the tool is standalone: no dependency on the (concluded) Surveyor
 bug-finding experiment. Importing this package registers the default lizard plugin.
 """
 from .units import Unit, get_plugin, register        # noqa: F401

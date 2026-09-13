@@ -40,7 +40,7 @@ from .engine import ChangeScore
 @dataclass
 class ChangeSummary:
     """The storage-agnostic description of a change that a grade needs. Deliberately tiny:
-    this is all a remote grade endpoint ever receives — a number and a language, never the
+    this is all a remote grade endpoint ever receives: a number and a language, never the
     diff or the source."""
     value: int               # composite impact to grade
     language: str | None     # dominant language; selects the seed table (None -> pooled)
@@ -158,6 +158,6 @@ def select_policy_provider(config_path: str | None, repo_path: str) -> PolicyPro
 
 
 def seed_grade(score: ChangeScore, prior_weight_K: float) -> Grade:
-    """The shipped-seed-only grade — the safe fallback when a remote provider is
+    """The shipped-seed-only grade: the safe fallback when a remote provider is
     unreachable. No project baseline, so `w = 0` and the grade is the pure seed rank."""
     return LocalGradeProvider(None, prior_weight_K).grade(ChangeSummary.of(score))

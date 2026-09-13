@@ -1,4 +1,4 @@
-"""The structural change-impact measure — the engine seam.
+"""The structural change-impact measure: the engine seam.
 
 Everything that knows the formula lives behind this module: it drives the vendored,
 self-contained `core` measure over a set of changed files, so the rest of the tool
@@ -19,7 +19,7 @@ from .core.impact import compute_file_impact
 from .core.units import get_plugin
 
 # Statuses that carry impact (added / modified / renamed). Deletions have no "after"
-# unit to weight, so — like the scan — they are not scored.
+# unit to weight, so (like the scan) they are not scored.
 IMPACT_STATUSES = ("A", "M", "R")
 
 
@@ -84,7 +84,7 @@ class ChangeScore:
     @property
     def empty(self) -> bool:
         # Nothing scored AND nothing skipped: a genuinely empty change. A change whose
-        # only source edits were skipped is not empty — the skip must still be reported.
+        # only source edits were skipped is not empty. The skip must still be reported.
         return self.files_changed == 0 and not self.skipped
 
 

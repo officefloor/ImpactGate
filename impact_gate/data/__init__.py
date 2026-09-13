@@ -1,12 +1,12 @@
 """Shipped data and the loader for it.
 
 Every tunable number the gate leans on lives in a JSON file in this package, not in
-code, so refining them as research lands is a data edit and a version bump — never a
+code, so refining them as research lands is a data edit and a version bump, never a
 code change:
 
-  defaults.json          — default gate / grading-curve constants (GateConfig reads
+  defaults.json          : default gate / grading-curve constants (GateConfig reads
                            these as its built-in defaults).
-  seed_percentiles.json  — per-language percentile tables of per-commit composite
+  seed_percentiles.json  : per-language percentile tables of per-commit composite
                            impact, with a pooled fallback. The cold-start prior for the
                            grading curve, derived from the corpus scan.
 

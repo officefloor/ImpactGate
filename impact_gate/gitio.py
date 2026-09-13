@@ -1,9 +1,9 @@
 """Turn a git change into the `ChangedFile` list the engine scores.
 
 Three change modes, one per trigger:
-  - range    : merge-base(base, HEAD)..HEAD  — the committed branch vs `main` (CI / PR).
-  - staged   : HEAD vs the index             — the commit you are about to make (pre-commit).
-  - worktree : HEAD vs files on disk         — uncommitted local edits.
+  - range    : merge-base(base, HEAD)..HEAD, the committed branch vs `main` (CI / PR).
+  - staged   : HEAD vs the index, the commit you are about to make (pre-commit).
+  - worktree : HEAD vs files on disk, uncommitted local edits.
 
 Uses the vendored git plumbing (`GitRepo.blob` for cat-file streaming, `parse_diff`
 for the -U0 hunk parse); the mode/base wiring and the working-tree read live here.
@@ -26,7 +26,7 @@ EMPTY_TREE = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
 
 
 class DiffError(RuntimeError):
-    """A change could not be resolved (e.g. no merge-base — shallow clone)."""
+    """A change could not be resolved (e.g. no merge-base, a shallow clone)."""
 
 
 def _git(repo_path: str, *args: str) -> str:
@@ -68,7 +68,7 @@ def changed_files(repo_path: str, mode: str = "staged",
             old_rev = _merge_base(repo_path, base, "HEAD")
             if old_rev is None:
                 raise DiffError(
-                    f"no merge-base between {base!r} and HEAD — the base branch is not "
+                    f"no merge-base between {base!r} and HEAD: the base branch is not "
                     f"present. Fetch full history first (on GitHub set "
                     f"`actions/checkout` with `fetch-depth: 0`, or `git fetch origin {base}`).")
             text = _git(repo_path, *_DIFF, old_rev, "HEAD")
@@ -129,7 +129,7 @@ def merge_base(repo_path: str, a: str, b: str) -> str | None:
 
 
 def is_ancestor(repo_path: str, ancestor: str, descendant: str) -> bool:
-    """True if `ancestor` is reachable from `descendant` — used to tell a child MR
+    """True if `ancestor` is reachable from `descendant`. Used to tell a child MR
     (feature merged into the branch) from a sync (parent/main merged into the branch)."""
     r = subprocess.run(["git", "-C", repo_path, "merge-base", "--is-ancestor",
                         ancestor, descendant], capture_output=True)

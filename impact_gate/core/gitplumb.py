@@ -1,4 +1,4 @@
-"""Git access — subprocess only, no network, no working-tree checkout required.
+"""Git access: subprocess only, no network, no working-tree checkout required.
 
 Trimmed to what the gate needs: blob streaming (cat-file --batch), a -U0 rename-aware
 diff, and the diff parser. Reads objects directly, so it is safe against a read-only
@@ -62,7 +62,7 @@ class GitRepo:
     def blob(self, rev: str, path: str) -> tuple[str, bytes] | None:
         """(<blob oid>, contents) of <rev>:<path>, or None if absent.
 
-        An empty `rev` addresses the index (stage 0), i.e. ":path" — used to read
+        An empty `rev` addresses the index (stage 0), i.e. ":path", used to read
         staged content without a checkout.
         """
         proc = self._ensure_batch()

@@ -1,7 +1,7 @@
 """Measure configuration: which files are source, how to group, ignore globs.
 
 Structural-decay focused: languages, ignore globs, test-path heuristics, and the
-rename similarity threshold. (No bug-keyword mining — that belonged to the earlier
+rename similarity threshold. (No bug-keyword mining; that belonged to the earlier
 defect-prediction experiment, not to a structural-decay gate.)
 """
 from __future__ import annotations

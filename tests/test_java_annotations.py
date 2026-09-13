@@ -1,6 +1,6 @@
 """Regression guard: annotated Java classes must stay visible to the measure.
 
-The measure is function-based, so a file the parser cannot read does not raise — it
+The measure is function-based, so a file the parser cannot read does not raise. It
 scores as "no functions, no cost". A parser regression therefore looks exactly like
 clean code, and a gate built on it silently stops blocking.
 
@@ -8,7 +8,7 @@ That happened: lizard 1.24.0 loses the second `@` when a bare annotation is foll
 by a parenthesised one at class level (`@Entity` then `@Table(name = "owners")`), so
 the class declaration is consumed as a method body and the whole file yields ZERO
 functions. Every Spring/JPA entity, repository and `@RestController` written that way
-became invisible, and any change to one scored impact 0 — it could never fail a gate
+became invisible, and any change to one scored impact 0, so it could never fail a gate
 no matter how much complexity it accreted.
 
 These tests assert the behaviour, not a version: whatever lizard is installed must see
@@ -33,7 +33,7 @@ public class Fixture {
 }
 """
 
-# The same class with one method accreted onto it — the change a structural gate exists
+# The same class with one method accreted onto it: the change a structural gate exists
 # to price (it is charged for the whole surrounding class, not just its own lines).
 ENTITY_PLUS_METHOD = ENTITY.replace(
     "}\n",

@@ -65,7 +65,7 @@ class GateConfig:
         return "ok"
 
     def blocks(self, impact: float) -> bool:
-        """True only when enforcement is 'block' AND the impact clears block_at — the
+        """True only when enforcement is 'block' AND the impact clears block_at: the
         one case that fails the gate. In 'warn' mode a too-high change still passes."""
         return self.enforcement == "block" and self.level(impact) == "block"
 

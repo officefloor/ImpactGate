@@ -1,6 +1,6 @@
 """Unit model + language-plugin registry.
 
-A plugin parses one file version (bytes) into Units — a function/method with its
+A plugin parses one file version (bytes) into Units, a function/method with its
 cohesion container, line range and cyclomatic complexity. Parsing is a pure function
 of the bytes, so callers may cache by content hash.
 """

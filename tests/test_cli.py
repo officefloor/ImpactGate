@@ -146,7 +146,7 @@ def test_curve_low_change_passes_and_reports_the_grade(repo, capsys):
 
 def test_curve_prior_weight_zero_grades_purely_against_baseline(repo, capsys):
     # --curve-prior-weight 0 overrides the default K so the grade is the baseline
-    # percentile alone (weight 1.0), with the shipped seed ignored — the flag the
+    # percentile alone (weight 1.0), with the shipped seed ignored: the flag the
     # gate uses to grade a change against a chosen reference distribution.
     _history(repo)
     main(["baseline", "--repo", str(repo)])

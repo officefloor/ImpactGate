@@ -90,14 +90,14 @@ def compute_file_impact(
     # change (the context you faced). A unit added to a brand-new container has no prior
     # siblings, so its WMC_other falls to 0 (floored to 1): importing/greenfield code costs
     # only ~CC*dlines, while a method accreted onto an existing (god) class is still charged
-    # for the siblings that were already there — so growth-by-accretion stays expensive.
+    # for the siblings that were already there, so growth-by-accretion stays expensive.
     before_by_container: dict[str, int] = {}
     for u in before:
         before_by_container[u.container] = before_by_container.get(u.container, 0) + u.cc
 
     def _wmc(u: Unit, src: Unit | None) -> int:
         # other pre-existing complexity in the container; subtract the unit's own prior
-        # contribution (`src`) only if it already existed — a new unit subtracts nothing.
+        # contribution (`src`) only if it already existed. A new unit subtracts nothing.
         base = before_by_container.get(u.container, 0)
         return max(base - (src.cc if src is not None else 0), 0)
 
