@@ -28,8 +28,22 @@ human or AI, so complexity cannot silently concentrate.
 ## Install
 
 ```bash
+pip install impact-gate         # installs the `impact-gate` command
+```
+
+Or run it without installing anything, via the published image (git is bundled;
+mount the repo to score at `/repo`):
+
+```bash
+docker run --rm -v "$PWD:/repo" ghcr.io/officefloor/impact-gate \
+  score --mode range --base origin/main
+```
+
+To hack on it locally, install from a checkout instead:
+
+```bash
 python -m venv .venv && . .venv/bin/activate
-pip install -e .                # installs the `impact-gate` command
+pip install -e '.[dev]'         # editable install plus the test deps
 ```
 
 ## Use
@@ -144,6 +158,7 @@ Make the check required in branch protection to gate merges. The comment needs
 - Baseline and grading curve. `impact-gate baseline` profiles the project history; the
   gate blends a seed-corpus prior with the project's own distribution and grades a change
   by its percentile (`score --curve`). Done.
-- Distribution. A Dockerfile so it runs on any CI with Docker. A `pip` package.
+- Distribution. `pip install impact-gate`, a `ghcr.io/officefloor/impact-gate` Docker
+  image for any CI, and a version-tagged Action (`@v0`). Done.
 - More CI plugins. A GitLab CI template and a Jenkins shared library.
 - Hooks and IDE. An `impact-gate install-hook` for pre-commit. Editor integration over LSP.

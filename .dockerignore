@@ -1,0 +1,24 @@
+# Keep the build context small: only the package sources and packaging metadata
+# are needed to `pip install .`. Everything below is dev-only or regenerated.
+.git
+.github
+.idea
+.vscode
+.venv
+venv
+env
+tests
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.coverage
+__pycache__
+*.py[cod]
+*.egg-info
+build
+dist
+Dockerfile
+.dockerignore
+TODO.md
+*.md
+!README.md

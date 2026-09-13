@@ -1,13 +1,33 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "impact-gate"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Measure and gate structural decay from a change (standalone + CI plugin)."
 readme = "README.md"
 requires-python = ">=3.10"
+license = "Apache-2.0"
+license-files = ["LICENSE"]
+authors = [{ name = "Daniel Sagenschneider" }]
+keywords = [
+    "code-quality", "complexity", "static-analysis", "ci", "pre-commit",
+    "technical-debt", "maintainability", "code-review",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Environment :: Console",
+    "Intended Audience :: Developers",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Quality Assurance",
+    "Topic :: Software Development :: Version Control :: Git",
+]
 # Fully standalone: the change-impact measure is vendored in impact_gate/core.
 # lizard is the only runtime dependency (multi-language CC + line ranges); PyYAML is
 # used only when an .impact-gate.yml config is present.
@@ -25,8 +45,16 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=7"]
 
+[project.urls]
+Homepage = "https://github.com/officefloor/ImpactGate"
+Repository = "https://github.com/officefloor/ImpactGate"
+Issues = "https://github.com/officefloor/ImpactGate/issues"
+
 [project.scripts]
 impact-gate = "impact_gate.cli:main"
+
+[tool.setuptools.dynamic]
+version = { attr = "impact_gate.__version__" }
 
 [tool.setuptools]
 packages = ["impact_gate", "impact_gate.core", "impact_gate.data"]
