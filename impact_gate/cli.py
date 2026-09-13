@@ -137,7 +137,23 @@ def _cmd_baseline(args) -> int:
     return 0
 
 
+def _detect_provider() -> str:
+    """Guess the CI provider from the environment when --provider is not given."""
+    if os.environ.get("GITLAB_CI") or os.environ.get("CI_MERGE_REQUEST_IID"):
+        return "gitlab"
+    return "github"
+
+
 def _cmd_comment(args) -> int:
+    provider = args.provider or _detect_provider()
+    body = (open(args.body_file, encoding="utf-8").read()
+            if args.body_file else sys.stdin.read())
+    if provider == "gitlab":
+        return _comment_gitlab(args, body)
+    return _comment_github(args, body)
+
+
+def _comment_github(args, body: str) -> int:
     from . import ghapi
     token = args.token or os.environ.get("GITHUB_TOKEN")
     repo = args.repo_slug or os.environ.get("GITHUB_REPOSITORY")
@@ -147,14 +163,33 @@ def _cmd_comment(args) -> int:
               "(GITHUB_TOKEN, GITHUB_REPOSITORY, GITHUB_EVENT_PATH are set in Actions).",
               file=sys.stderr)
         return 1
-    body = (open(args.body_file, encoding="utf-8").read()
-            if args.body_file else sys.stdin.read())
     try:
         result = ghapi.upsert_pr_comment(ghapi.GitHubAPI(token), repo, int(pr), body)
     except Exception as e:
         print(f"impact-gate: could not post PR comment: {e}", file=sys.stderr)
         return 1
     print(f"impact-gate: PR comment {result}")
+    return 0
+
+
+def _comment_gitlab(args, body: str) -> int:
+    from . import glapi
+    token = args.token or os.environ.get("GITLAB_TOKEN")
+    project = args.repo_slug or os.environ.get("CI_PROJECT_ID")
+    mr = args.pr or os.environ.get("CI_MERGE_REQUEST_IID")
+    api_base = os.environ.get("CI_API_V4_URL") or glapi.API
+    if not token or not project or not mr:
+        print("impact-gate: need a token, project, and MR iid to comment on GitLab "
+              "(GITLAB_TOKEN with api scope; CI_PROJECT_ID and CI_MERGE_REQUEST_IID are "
+              "set in merge-request pipelines).", file=sys.stderr)
+        return 1
+    try:
+        result = glapi.upsert_mr_note(glapi.GitLabAPI(token, api_base),
+                                      project, int(mr), body)
+    except Exception as e:
+        print(f"impact-gate: could not post MR note: {e}", file=sys.stderr)
+        return 1
+    print(f"impact-gate: MR note {result}")
     return 0
 
 
@@ -182,11 +217,21 @@ def main(argv: list[str] | None = None) -> int:
     b.add_argument("--measure-config", help="Surveyor-style YAML for ignore globs etc.")
     b.set_defaults(func=_cmd_baseline)
 
-    c = sub.add_parser("comment", help="upsert a sticky PR comment with a report (CI)")
+    c = sub.add_parser("comment",
+                       help="upsert a sticky PR/MR comment with a report (CI)")
+    c.add_argument("--provider", choices=("github", "gitlab"),
+                   help="CI provider to post to (default: auto-detected from the "
+                        "environment; GitLab when GITLAB_CI/CI_MERGE_REQUEST_IID is set, "
+                        "else GitHub).")
     c.add_argument("--body-file", help="markdown file to post (default: read stdin)")
-    c.add_argument("--repo-slug", help="owner/name (default: $GITHUB_REPOSITORY)")
-    c.add_argument("--pr", type=int, help="PR number (default: from $GITHUB_EVENT_PATH)")
-    c.add_argument("--token", help="GitHub token (default: $GITHUB_TOKEN)")
+    c.add_argument("--repo-slug",
+                   help="GitHub owner/name (default: $GITHUB_REPOSITORY) or GitLab "
+                        "project id/path (default: $CI_PROJECT_ID).")
+    c.add_argument("--pr", type=int,
+                   help="GitHub PR number (default: from $GITHUB_EVENT_PATH) or GitLab "
+                        "MR iid (default: $CI_MERGE_REQUEST_IID).")
+    c.add_argument("--token",
+                   help="API token (default: $GITHUB_TOKEN, or $GITLAB_TOKEN for GitLab).")
     c.set_defaults(func=_cmd_comment)
 
     args = ap.parse_args(argv)

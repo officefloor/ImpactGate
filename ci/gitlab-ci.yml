@@ -1,0 +1,40 @@
+# impact-gate — GitLab CI template.
+#
+# Scores each merge request against its base with the change-impact measure and posts
+# a sticky note to the MR. Runs the published Docker image, so nothing to install.
+#
+# Use it one of two ways:
+#
+#   1. Copy the `impact-gate` job below into your `.gitlab-ci.yml`, or
+#   2. include it remotely:
+#        include:
+#          - remote: 'https://raw.githubusercontent.com/officefloor/ImpactGate/v0/ci/gitlab-ci.yml'
+#
+# To post the sticky MR note, add a CI/CD variable GITLAB_TOKEN holding a project or
+# personal access token with the `api` scope. Without it the job still scores and gates;
+# it just skips the note. In `block` enforcement the job fails when the impact is too
+# high — mark it required in your merge request settings to gate merges.
+
+impact-gate:
+  image: ghcr.io/officefloor/impact-gate:0     # pin to a major; use :0.1.0 to pin exactly
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+  variables:
+    GIT_DEPTH: "0"                             # full history so the merge base is present
+  script:
+    - |
+      set +e   # do not abort on a blocking score; capture it and gate at the end
+      impact-gate score --mode range --base "$CI_MERGE_REQUEST_DIFF_BASE_SHA" \
+        --format markdown > impact-gate.md
+      code=$?
+      cat impact-gate.md
+      if [ -n "$GITLAB_TOKEN" ] && [ -s impact-gate.md ]; then
+        impact-gate comment --provider gitlab --body-file impact-gate.md \
+          || echo "impact-gate: could not post the MR note (need GITLAB_TOKEN with api scope)"
+      fi
+      exit $code
+  artifacts:
+    when: always
+    paths:
+      - impact-gate.md
+    expire_in: 1 week

@@ -2,6 +2,7 @@
 import json
 import os
 
+from impact_gate import cli, glapi
 from impact_gate.cli import main
 from gitutil import cc_func, commit, write
 
@@ -171,3 +172,42 @@ def test_curve_without_baseline_grades_on_seed_only(repo, capsys):
     assert data["grade"]["n"] == 0
     assert data["grade"]["project_percentile"] is None   # pure seed at cold start
     assert data["grade"]["percentile"] == data["grade"]["seed_percentile"]
+
+
+# ------------------------------------------------------------------ comment command
+
+def test_comment_detects_gitlab_from_env(monkeypatch, tmp_path, capsys):
+    # GITLAB_CI in the environment routes `comment` to the GitLab path; the MR note is
+    # upserted with the resolved project/iid and no GitHub call is attempted.
+    posted = {}
+    monkeypatch.setattr(glapi, "upsert_mr_note",
+                        lambda api, project, mr, body: posted.update(
+                            project=project, mr=mr, body=body) or "created")
+    for k in ("GITHUB_REPOSITORY", "GITHUB_TOKEN", "GITHUB_EVENT_PATH"):
+        monkeypatch.delenv(k, raising=False)
+    monkeypatch.setenv("GITLAB_CI", "true")
+    monkeypatch.setenv("GITLAB_TOKEN", "tok")
+    monkeypatch.setenv("CI_PROJECT_ID", "42")
+    monkeypatch.setenv("CI_MERGE_REQUEST_IID", "7")
+    body = tmp_path / "report.md"
+    body.write_text("## Change impact: 2\n")
+    code = main(["comment", "--body-file", str(body)])
+    assert code == 0
+    assert posted == {"project": "42", "mr": 7, "body": "## Change impact: 2\n"}
+    assert "MR note created" in capsys.readouterr().out
+
+
+def test_comment_gitlab_missing_config_errs_cleanly(monkeypatch, tmp_path, capsys):
+    for k in ("GITLAB_TOKEN", "CI_PROJECT_ID", "CI_MERGE_REQUEST_IID"):
+        monkeypatch.delenv(k, raising=False)
+    body = tmp_path / "report.md"
+    body.write_text("x")
+    code = main(["comment", "--provider", "gitlab", "--body-file", str(body)])
+    assert code == 1
+    assert "GITLAB_TOKEN" in capsys.readouterr().err
+
+
+def test_detect_provider_defaults_to_github(monkeypatch):
+    for k in ("GITLAB_CI", "CI_MERGE_REQUEST_IID"):
+        monkeypatch.delenv(k, raising=False)
+    assert cli._detect_provider() == "github"

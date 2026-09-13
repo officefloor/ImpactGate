@@ -1,0 +1,39 @@
+// impact-gate — Jenkins pipeline snippet.
+//
+// Scores a change against its target branch with the change-impact measure, using the
+// published Docker image. Requires an agent with Docker and a full clone (Jenkins does
+// a full clone by default). In `block` enforcement the stage fails when the impact is
+// too high, failing the build.
+//
+// This runs the image with `docker run` rather than `docker.inside`: the image sets an
+// ENTRYPOINT (`impact-gate`), which `docker.inside` does not keep alive. CHANGE_TARGET
+// is set by the multibranch/PR job for change requests; it falls back to main otherwise.
+//
+// Posting the score back to the PR/MR is left to your SCM integration (e.g. the GitHub
+// or GitLab Branch Source plugins). To post it with impact-gate itself, run
+// `impact-gate comment` in the container with the provider's token and env set — see the
+// GitHub Action and ci/gitlab-ci.yml for the variables each provider needs.
+
+pipeline {
+  agent any
+  stages {
+    stage('Change impact') {
+      steps {
+        sh '''
+          set +e   # capture a blocking score and gate at the end, do not abort here
+          docker run --rm -v "$PWD:/repo" ghcr.io/officefloor/impact-gate:0 \
+            score --mode range --base "origin/${CHANGE_TARGET:-main}" \
+            --format markdown > impact-gate.md
+          code=$?
+          cat impact-gate.md
+          exit $code
+        '''
+      }
+    }
+  }
+  post {
+    always {
+      archiveArtifacts artifacts: 'impact-gate.md', allowEmptyArchive: true
+    }
+  }
+}

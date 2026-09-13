@@ -148,6 +148,32 @@ updated each run). In `block` mode the job fails when impact exceeds the block t
 Make the check required in branch protection to gate merges. The comment needs
 `pull-requests: write`. Without it the run still passes and just skips the comment.
 
+## Use in GitLab CI
+
+A ready-made job is in [`ci/gitlab-ci.yml`](ci/gitlab-ci.yml). Copy it into your
+`.gitlab-ci.yml`, or include it remotely:
+
+```yaml
+include:
+  - remote: 'https://raw.githubusercontent.com/officefloor/ImpactGate/v0/ci/gitlab-ci.yml'
+```
+
+It runs on merge-request pipelines, scores the MR against its base
+(`$CI_MERGE_REQUEST_DIFF_BASE_SHA`) with the published Docker image, and — when a CI/CD
+variable `GITLAB_TOKEN` with the `api` scope is set — posts a sticky note to the MR (one
+note, updated each run). Without the token it still scores and gates; it just skips the
+note. In `block` enforcement the job fails when impact is too high; make it required in
+the merge request settings to gate merges.
+
+## Use in Jenkins
+
+A pipeline snippet is in [`ci/Jenkinsfile`](ci/Jenkinsfile). It runs the Docker image on
+an agent with Docker, scoring the change against its target branch
+(`origin/${CHANGE_TARGET:-main}`) and archiving the report. In `block` enforcement the
+stage fails when impact is too high. Posting the score back to the PR/MR is left to your
+SCM integration; to post it with the tool itself, run `impact-gate comment` in the
+container with the provider's token and env set.
+
 ## Roadmap
 
 - Core CLI. Score staged, worktree, or range. Warn or block. Text, JSON, markdown. Done.
@@ -157,5 +183,6 @@ Make the check required in branch protection to gate merges. The comment needs
   by its percentile (`score --curve`). Done.
 - Distribution. `pip install impact-gate`, a `ghcr.io/officefloor/impact-gate` Docker
   image for any CI, and a version-tagged Action (`@v0`). Done.
-- More CI plugins. A GitLab CI template and a Jenkins shared library.
+- More CI plugins. A GitLab CI template and a Jenkins pipeline snippet, both wrapping the
+  Docker image (`ci/gitlab-ci.yml`, `ci/Jenkinsfile`). GitLab posts a sticky MR note. Done.
 - Hooks and IDE. An `impact-gate install-hook` for pre-commit. Editor integration over LSP.
