@@ -15,15 +15,12 @@ impact = files_changed * Σ max(WMC_other, 1) * CC * Δlines      (over changed 
 on the pre-change state. So importing a brand-new file or class is cheap. Nothing was
 there before. Piling onto an already-heavy class is expensive. That is the decay signal.
 
+For the reasoning behind the formula, see [Measuring the Blast Radius of
+Change](https://blog.officefloor.net/2026/08/measuring-blast-radius-of-change.html) on
+the OfficeFloor blog.
+
 When impact is too high, the gate asks you to simplify the change or refactor the code
 it touches. It can warn (report only) or block (fail the build).
-
-This tool is the instrument for an experiment. The experiment studies how to control
-structural decay under AI-augmented development. The gate sits in front of every change,
-human or AI, so complexity cannot silently concentrate.
-
-> Fully standalone. The measure is vendored in `impact_gate/core/`. Only `lizard` is
-> required at runtime.
 
 ## Install
 
