@@ -35,8 +35,23 @@ the publisher once, before the first release:
 ### GHCR (Docker image)
 
 No setup: the `docker` job pushes to `ghcr.io/officefloor/impact-gate` using the
-built-in `GITHUB_TOKEN`. After the first push, make the package public in the repo's
-Packages settings if anonymous `docker pull` is wanted.
+built-in `GITHUB_TOKEN`.
+
+**The package must stay public.** The README's `docker run` example and the GitLab and
+Jenkins templates (`ci/gitlab-ci.yml`, `ci/Jenkinsfile`) all pull
+`ghcr.io/officefloor/impact-gate:0` anonymously; a private package breaks all of them
+with an `unauthorized` error, while leaving `pip install impact-gate` unaffected. Make it
+public once at
+https://github.com/orgs/officefloor/packages/container/impact-gate/settings (Danger Zone
+> Change visibility). This needs public packages to be allowed at the org level first
+(https://github.com/organizations/officefloor/settings/packages), or the per-package
+control is disabled. Verify after any release or org-policy change with an anonymous
+pull:
+
+```bash
+docker logout ghcr.io
+docker pull ghcr.io/officefloor/impact-gate:0
+```
 
 ## Cutting a release
 
