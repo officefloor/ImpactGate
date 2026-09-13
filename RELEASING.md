@@ -61,12 +61,19 @@ git tag v0.1.0 && git push origin v0.1.0   # workflow also creates/moves v0
 
 ## GitHub Marketplace (the Action)
 
-Publishing to the Marketplace is a manual GitHub UI step and only needs doing once:
+The release workflow already creates a GitHub Release for each tag (the `github-release`
+job), and a Release is where the Marketplace listing lives. `action.yml` is
+Marketplace-ready: `name: impact-gate` (verified free on the Marketplace as of the last
+release), and `branding.icon`/`branding.color` are set (`activity` / `purple`, both in
+GitHub's allowed set).
 
-1. Confirm the `name:` in `action.yml` is unique across the Marketplace (names are
-   global). `impact-gate` is the current name; change it if it is taken.
-2. Draft a GitHub Release for the version tag. GitHub shows a "Publish this Action to
-   the GitHub Marketplace" checkbox — tick it, pick a category (e.g. Code quality),
-   and accept the agreement. `branding.icon`/`branding.color` in `action.yml` are
-   already set (`activity` / `purple`).
-3. Publish the release. Later releases update the listing automatically.
+Listing the Action on the Marketplace is a one-time manual UI step (the "publish"
+checkbox is not exposed to the API):
+
+1. Open the auto-created Release for the current tag (Releases page) and click Edit.
+   If the Marketplace checkbox does not appear, confirm `action.yml` is on the default
+   branch and the `name:` is still unique (names are global; change it if taken).
+2. Tick "Publish this Action to the GitHub Marketplace", accept the agreement, and pick
+   a primary category (e.g. Code quality) and optional secondary one.
+3. Update the Release. Every later release created by the workflow updates the listing
+   automatically; the checkbox only has to be set this once.

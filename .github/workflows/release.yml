@@ -114,3 +114,36 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git tag -f "$major" "$GITHUB_SHA"
           git push -f origin "refs/tags/$major"
+
+  # Create the GitHub Release for the tag, with generated notes and the built
+  # artifacts attached. The Release is where the Marketplace listing lives: the first
+  # listing is a one-time manual step (edit the Release, tick "Publish this Action to
+  # the GitHub Marketplace"); after that, each release created here updates the listing.
+  github-release:
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
+      - name: Create or refresh release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Idempotent, like the skip-existing PyPI publish: create the release if it
+          # does not exist yet, otherwise just refresh the attached artifacts.
+          if gh release view "$GITHUB_REF_NAME" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" dist/* \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "$GITHUB_REF_NAME" \
+              --generate-notes \
+              --verify-tag
+          fi
