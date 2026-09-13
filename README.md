@@ -135,7 +135,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: officefloor/ImpactGate@v1
+      - uses: officefloor/ImpactGate@v0
         with:
           enforcement: warn        # switch to block when ready
           # warn-at: 50000
