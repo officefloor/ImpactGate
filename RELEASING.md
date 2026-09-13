@@ -13,7 +13,10 @@ Marketplace.
   that major. Consumers of the Action pin to the major: `officefloor/ImpactGate@v0`.
 - The package version is single-sourced from `impact_gate/__init__.py` (`__version__`);
   `pyproject.toml` reads it dynamically. Bump it there before tagging, and keep the tag
-  in sync with it (`v0.1.0` <-> `__version__ = "0.1.0"`).
+  in sync with it (`v0.1.0` <-> `__version__ = "0.1.0"`). The release workflow enforces
+  this: it fails fast if the pushed tag does not equal `v<__version__>`, so a mismatched
+  release cannot publish. (PyPI publishes are also `skip-existing`, so re-running a
+  release on an already-published version is a no-op rather than a failure.)
 
 ## One-time setup
 

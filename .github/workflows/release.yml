@@ -19,6 +19,17 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+      # Guard: the package version (impact_gate.__version__, what PyPI publishes) must
+      # match the tag being released. This is skipped for manual workflow_dispatch runs.
+      - name: Check tag matches __version__
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          set -euo pipefail
+          pkg="$(python -c 'import impact_gate; print(impact_gate.__version__)')"
+          if [ "$GITHUB_REF_NAME" != "v$pkg" ]; then
+            echo "::error::tag $GITHUB_REF_NAME does not match impact_gate.__version__=$pkg (expected v$pkg). Bump impact_gate/__init__.py to match the tag."
+            exit 1
+          fi
       - name: Build sdist and wheel
         run: |
           python -m pip install --upgrade build
@@ -47,6 +58,9 @@ jobs:
           name: dist
           path: dist/
       - uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # A re-run of an already-published version is a no-op, not a failure.
+          skip-existing: true
 
   docker:
     needs: build
