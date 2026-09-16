@@ -1,0 +1,41 @@
+name: Deploy Site to GitHub Pages
+
+# Publishes the static landing page in site/ to impactgate.officefloor.net.
+# Mirrors the OfficeFloor site deploy: peaceiris/actions-gh-pages into
+# gh-pages/docs. The site is static, so there is no build step, and it
+# deploys within this repo using the built-in GITHUB_TOKEN (no PAT needed).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/site.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages-deploy
+  cancel-in-progress: true
+
+jobs:
+  deploy-site:
+    runs-on: ubuntu-latest
+    steps:
+
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Deploy Site
+      uses: peaceiris/actions-gh-pages@v4
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./site
+        destination_dir: docs
+        publish_branch: gh-pages
+        force_orphan: true
+        user_name: 'github-actions[bot]'
+        user_email: 'github-actions[bot]@users.noreply.github.com'
+        commit_message: 'Deploy site to impactgate.officefloor.net'

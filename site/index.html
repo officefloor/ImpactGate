@@ -1,0 +1,760 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>ImpactGate: measure the structural decay a change adds</title>
+<meta name="description" content="ImpactGate scores the structural decay every change adds, its blast radius, and flags the big ones before they cost you a rewrite. Runs as a CLI, a pre-commit hook, and as checks on GitHub, GitLab, and Jenkins." />
+<link rel="canonical" href="https://impactgate.officefloor.net/" />
+<meta name="theme-color" content="#0E5A57" media="(prefers-color-scheme: light)" />
+<meta name="theme-color" content="#0B1211" media="(prefers-color-scheme: dark)" />
+<meta property="og:type" content="website" />
+<meta property="og:site_name" content="ImpactGate" />
+<meta property="og:title" content="ImpactGate: the change-impact gate" />
+<meta property="og:description" content="AI slop is complexity you cannot see. ImpactGate measures the decay before it costs you a rewrite." />
+<meta property="og:url" content="https://impactgate.officefloor.net/" />
+<meta name="twitter:card" content="summary_large_image" />
+<meta name="twitter:title" content="ImpactGate: the change-impact gate" />
+<meta name="twitter:description" content="AI slop is complexity you cannot see. ImpactGate measures the decay before it costs you a rewrite." />
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" />
+<style>
+  :root { color-scheme: light dark; }
+  html { -webkit-text-size-adjust: 100%; }
+  body { margin: 0; }
+  img { max-width: 100%; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<style>
+  :root {
+    --bg: #F3F6F5;
+    --surface: #FFFFFF;
+    --surface-2: #EAF0EE;
+    --ink: #14201F;
+    --muted: #566A67;
+    --line: #D6DFDC;
+    --line-strong: #C2CECA;
+    --accent: #0E5A57;
+    --accent-ink: #0B4744;
+    --accent-soft: #DCEBE9;
+    --signal: #C24A12;
+    --signal-bright: #DA5316;
+    --signal-soft: #F7E7DC;
+    --good: #157F63;
+    --shadow: 0 1px 2px rgba(20,32,31,.06), 0 12px 30px rgba(20,32,31,.07);
+    --shadow-sm: 0 1px 2px rgba(20,32,31,.06);
+    --radius: 14px;
+    --radius-sm: 9px;
+    --maxw: 1120px;
+    --font-display: "Archivo", system-ui, sans-serif;
+    --font-body: "IBM Plex Sans", system-ui, sans-serif;
+    --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --bg: #0B1211;
+      --surface: #101A19;
+      --surface-2: #16211F;
+      --ink: #E8EDEB;
+      --muted: #90A6A2;
+      --line: #23312E;
+      --line-strong: #30413D;
+      --accent: #35B7AB;
+      --accent-ink: #7FD8CF;
+      --accent-soft: #12302D;
+      --signal: #FF7A45;
+      --signal-bright: #FF6E38;
+      --signal-soft: #2A1A11;
+      --good: #43C6A0;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 18px 40px rgba(0,0,0,.4);
+      --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0B1211;
+    --surface: #101A19;
+    --surface-2: #16211F;
+    --ink: #E8EDEB;
+    --muted: #90A6A2;
+    --line: #23312E;
+    --line-strong: #30413D;
+    --accent: #35B7AB;
+    --accent-ink: #7FD8CF;
+    --accent-soft: #12302D;
+    --signal: #FF7A45;
+    --signal-bright: #FF6E38;
+    --signal-soft: #2A1A11;
+    --good: #43C6A0;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 18px 40px rgba(0,0,0,.4);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,.4);
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 16px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  h1, h2, h3 { font-family: var(--font-display); font-weight: 800; line-height: 1.05; margin: 0; text-wrap: balance; letter-spacing: -0.02em; }
+  p { margin: 0; }
+  a { color: inherit; }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding-inline: 24px; }
+
+  .eyebrow {
+    font-family: var(--font-mono);
+    font-size: 12px;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--accent);
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .eyebrow::before {
+    content: "";
+    width: 22px; height: 1px; background: var(--accent); display: inline-block;
+  }
+
+  /* nav */
+  .nav {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 20;
+    background: color-mix(in srgb, var(--bg) 82%, transparent);
+    backdrop-filter: saturate(1.4) blur(10px);
+    border-bottom: 1px solid var(--line);
+  }
+  .nav-in { display: flex; align-items: center; gap: 20px; height: 60px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 800; font-size: 18px; letter-spacing: -0.02em; text-decoration: none; }
+  .brand .mark { width: 22px; height: 22px; flex: none; }
+  .ver { font-family: var(--font-mono); font-size: 11px; color: var(--muted); border: 1px solid var(--line-strong); border-radius: 999px; padding: 2px 8px; }
+  .nav-links { margin-left: auto; display: flex; align-items: center; gap: 22px; }
+  .nav-links a { text-decoration: none; color: var(--muted); font-size: 14px; font-weight: 500; }
+  .nav-links a:hover { color: var(--ink); }
+  .nav-cta { display: inline-flex; align-items: center; gap: 7px; background: var(--ink); color: var(--bg); padding: 8px 15px; border-radius: 999px; font-size: 14px; font-weight: 600; text-decoration: none; }
+  .nav-cta:hover { opacity: .9; }
+  @media (max-width: 720px) { .nav-links a.hide-sm { display: none; } }
+
+  /* hero */
+  .hero { padding-block: 64px 40px; }
+  .hero-grid { display: grid; grid-template-columns: 1.05fr 0.95fr; gap: 52px; align-items: center; }
+  .hero h1 { font-size: clamp(38px, 6vw, 62px); }
+  .hero h1 .slop { color: var(--signal); }
+  .lede { margin-top: 22px; font-size: clamp(17px, 2.1vw, 20px); color: var(--muted); max-width: 34ch; line-height: 1.5; }
+  .cta-row { margin-top: 30px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+  .btn { display: inline-flex; align-items: center; gap: 9px; border-radius: 11px; padding: 12px 18px; font-weight: 600; font-size: 15px; text-decoration: none; border: 1px solid transparent; cursor: pointer; font-family: var(--font-body); }
+  .btn-primary { background: var(--accent); color: #fff; }
+  :root[data-theme="dark"] .btn-primary, :root:not([data-theme="light"]) .btn-primary { color: #06110F; }
+  @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .btn-primary { color: #06110F; } }
+  .btn-primary:hover { background: var(--accent-ink); }
+  .btn-ghost { background: var(--surface); color: var(--ink); border-color: var(--line-strong); }
+  .btn-ghost:hover { border-color: var(--accent); color: var(--accent); }
+  .btn svg { width: 17px; height: 17px; }
+  .cmd {
+    font-family: var(--font-mono); font-size: 14px; display: inline-flex; align-items: center; gap: 12px;
+    background: var(--surface-2); border: 1px solid var(--line); border-radius: 11px; padding: 10px 12px 10px 14px; color: var(--ink);
+  }
+  .cmd .dollar { color: var(--accent); }
+  .copy-btn { border: none; background: transparent; cursor: pointer; color: var(--muted); display: inline-flex; padding: 4px; border-radius: 6px; }
+  .copy-btn:hover { color: var(--ink); background: color-mix(in srgb, var(--ink) 8%, transparent); }
+  .copy-btn svg { width: 15px; height: 15px; display: block; }
+  .runners { margin-top: 20px; display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font-family: var(--font-mono); font-size: 13px; }
+  .runners .rlabel { color: var(--muted); }
+  .runners a { color: var(--accent); text-decoration: none; border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, transparent); padding-bottom: 1px; }
+  .runners a:hover { border-bottom-color: var(--accent); }
+  .trust { margin-top: 22px; display: flex; flex-wrap: wrap; gap: 8px 20px; font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); }
+  .trust span { display: inline-flex; align-items: center; gap: 7px; }
+  .trust b { color: var(--ink); font-weight: 600; }
+  .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--good); }
+
+  /* score panel */
+  .panel {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 18px; box-shadow: var(--shadow);
+    overflow: hidden;
+  }
+  .panel-head { display: flex; align-items: center; gap: 10px; padding: 13px 16px; border-bottom: 1px solid var(--line); font-family: var(--font-mono); font-size: 13px; color: var(--muted); }
+  .panel-head .lights { display: inline-flex; gap: 6px; margin-right: 4px; }
+  .panel-head .lights i { width: 10px; height: 10px; border-radius: 50%; background: var(--line-strong); display: block; }
+  .pill { margin-left: auto; font-family: var(--font-mono); font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; padding: 3px 9px; border-radius: 999px; }
+  .pill.warn { color: var(--signal); background: var(--signal-soft); border: 1px solid color-mix(in srgb, var(--signal) 35%, transparent); }
+  .panel-body { padding: 20px 20px 22px; }
+  .change-line { font-family: var(--font-mono); font-size: 13px; color: var(--muted); }
+  .change-line b { color: var(--ink); font-weight: 600; }
+  .score-big { font-family: var(--font-display); font-weight: 800; font-size: 54px; letter-spacing: -0.03em; line-height: 1; margin-top: 8px; font-variant-numeric: tabular-nums; }
+  .score-sub { font-family: var(--font-mono); font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+  .breakdown { display: grid; grid-template-columns: repeat(4, 1fr); gap: 1px; margin-top: 20px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+  .breakdown div { background: var(--surface); padding: 10px 8px; text-align: center; }
+  .breakdown .k { font-family: var(--font-mono); font-size: 10px; letter-spacing: .06em; text-transform: uppercase; color: var(--muted); }
+  .breakdown .v { font-family: var(--font-mono); font-size: 16px; font-weight: 600; margin-top: 3px; font-variant-numeric: tabular-nums; }
+  .grade { margin-top: 22px; }
+  .grade-top { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 12px; color: var(--muted); margin-bottom: 8px; }
+  .grade-top b { color: var(--signal); font-weight: 600; }
+  .track { position: relative; height: 10px; border-radius: 999px; background: linear-gradient(90deg, var(--good) 0%, var(--good) 62%, var(--signal-bright) 88%, var(--signal-bright) 100%); opacity: .9; }
+  .tick { position: absolute; top: -5px; width: 2px; height: 20px; background: var(--ink); opacity: .28; }
+  .marker { position: absolute; top: 50%; width: 15px; height: 15px; border-radius: 50%; background: var(--surface); border: 3px solid var(--signal); transform: translate(-50%, -50%); box-shadow: var(--shadow-sm); transition: left 1.1s cubic-bezier(.2,.7,.2,1); }
+  .grade-legend { display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 10.5px; color: var(--muted); margin-top: 7px; }
+  .refactor { margin-top: 18px; padding-top: 16px; border-top: 1px solid var(--line); font-size: 13px; color: var(--muted); }
+  .refactor b { color: var(--ink); font-weight: 600; font-family: var(--font-mono); }
+  .refactor .share { color: var(--signal); font-family: var(--font-mono); font-weight: 600; }
+
+  /* generic section */
+  section { padding-block: 56px; }
+  .sec-head { max-width: 40ch; }
+  .sec-head h2 { font-size: clamp(28px, 4vw, 40px); margin-top: 14px; }
+  .sec-head p { margin-top: 16px; color: var(--muted); font-size: 17px; }
+
+  /* thesis */
+  .thesis { border-top: 1px solid var(--line); background: var(--surface); }
+  .thesis-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 52px; align-items: center; }
+  .prose p { margin-top: 16px; color: var(--ink); font-size: 17.5px; line-height: 1.62; }
+  .prose p:first-child { margin-top: 0; }
+  .prose .kick { font-family: var(--font-display); font-weight: 700; font-size: 22px; color: var(--ink); letter-spacing: -.01em; }
+  .prose .warnword { color: var(--signal); font-weight: 600; }
+  .chart-card { background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; box-shadow: var(--shadow-sm); }
+  .chart-card .cap { font-family: var(--font-mono); font-size: 11.5px; color: var(--muted); letter-spacing: .04em; text-transform: uppercase; }
+  .chart-card svg { width: 100%; height: auto; display: block; margin-top: 6px; }
+  .cx-grid { stroke: var(--line); stroke-width: 1; }
+  .cx-thresh-block { stroke: var(--signal); stroke-width: 1.5; stroke-dasharray: 5 4; }
+  .cx-thresh-warn { stroke: var(--accent); stroke-width: 1.5; stroke-dasharray: 5 4; }
+  .cx-area { fill: color-mix(in srgb, var(--signal) 12%, transparent); }
+  .cx-line { fill: none; stroke: var(--ink); stroke-width: 2.5; stroke-linejoin: round; stroke-linecap: round; }
+  .cx-dot { fill: var(--accent); }
+  .cx-dot.big { fill: var(--signal); }
+  .cx-lbl { fill: var(--muted); font-family: var(--font-mono); font-size: 11px; }
+
+  /* formula */
+  .formula-wrap { background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius); padding: 30px 26px; }
+  .formula { font-family: var(--font-mono); font-size: clamp(16px, 2.6vw, 24px); font-weight: 500; text-align: center; line-height: 1.8; overflow-x: auto; }
+  .formula .t { color: var(--accent); font-weight: 600; }
+  .formula .s { color: var(--signal); font-weight: 600; }
+  .formula .op { color: var(--muted); }
+  .annot { margin-top: 26px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .annot div { border-left: 2px solid var(--line-strong); padding-left: 12px; }
+  .annot .term { font-family: var(--font-mono); font-size: 13px; font-weight: 600; color: var(--ink); }
+  .annot .desc { font-size: 13.5px; color: var(--muted); margin-top: 4px; line-height: 1.45; }
+  .formula-note { margin-top: 24px; font-size: 15px; color: var(--muted); text-align: center; max-width: 60ch; margin-inline: auto; }
+  .formula-note b { color: var(--ink); font-weight: 600; }
+
+  /* pillars */
+  .pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 40px; }
+  .pillar { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 22px; box-shadow: var(--shadow-sm); }
+  .pillar .pnum { font-family: var(--font-mono); font-size: 12px; color: var(--accent); font-weight: 600; }
+  .pillar h3 { font-size: 19px; margin-top: 12px; letter-spacing: -.01em; }
+  .pillar p { margin-top: 9px; color: var(--muted); font-size: 14.5px; line-height: 1.55; }
+  .pillar.lead { background: linear-gradient(180deg, var(--accent-soft), var(--surface)); border-color: color-mix(in srgb, var(--accent) 30%, var(--line)); }
+
+  /* run / terminal */
+  .run-grid { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: 40px; align-items: center; }
+  .surfaces { display: flex; flex-direction: column; gap: 12px; margin-top: 26px; }
+  .surface-row { display: flex; align-items: flex-start; gap: 13px; }
+  .surface-row .ic { width: 34px; height: 34px; flex: none; border-radius: 9px; background: var(--accent-soft); color: var(--accent); display: grid; place-items: center; }
+  .surface-row .ic svg { width: 18px; height: 18px; }
+  .surface-row b { font-weight: 600; font-size: 15px; }
+  .surface-row p { color: var(--muted); font-size: 13.5px; margin-top: 2px; }
+  .terminal { background: #0C1615; border: 1px solid #1E2C29; border-radius: var(--radius); overflow: hidden; box-shadow: var(--shadow); }
+  .terminal .tbar { display: flex; align-items: center; gap: 7px; padding: 11px 14px; border-bottom: 1px solid #1E2C29; }
+  .terminal .tbar i { width: 11px; height: 11px; border-radius: 50%; display: block; }
+  .terminal .tbar .tt { font-family: var(--font-mono); font-size: 12px; color: #6E837F; margin-left: 8px; }
+  .terminal pre { margin: 0; padding: 18px 18px 20px; font-family: var(--font-mono); font-size: 13px; line-height: 1.65; color: #C9D6D2; overflow-x: auto; }
+  .terminal .c-cmd { color: #EAF2EF; }
+  .terminal .c-dollar { color: #35B7AB; }
+  .terminal .c-mut { color: #6E837F; }
+  .terminal .c-warn { color: #FF8A55; font-weight: 600; }
+  .terminal .c-ok { color: #43C6A0; }
+  .terminal .c-white { color: #EAF2EF; }
+
+  /* install */
+  .install { border-top: 1px solid var(--line); background: var(--surface); }
+  .install-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 34px; }
+  .icard { border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; background: var(--bg); display: flex; flex-direction: column; }
+  .icard .lab { font-family: var(--font-mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+  .icard h3 { font-size: 17px; margin-top: 6px; }
+  .icard p { color: var(--muted); font-size: 13.5px; margin-top: 6px; flex: 1; }
+  .code-line { margin-top: 14px; background: var(--surface-2); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 11px 12px; display: flex; align-items: center; gap: 10px; font-family: var(--font-mono); font-size: 12.5px; overflow-x: auto; }
+  .code-line code { white-space: pre; }
+  .code-line .c-dollar { color: var(--accent); }
+  .code-line .copy-btn { margin-left: auto; flex: none; }
+
+  /* honesty */
+  .honesty-card { background: var(--surface); border: 1px solid var(--line-strong); border-radius: var(--radius); padding: 34px; box-shadow: var(--shadow); position: relative; }
+  .honesty-card .q { font-family: var(--font-display); font-weight: 700; font-size: clamp(21px, 3vw, 28px); line-height: 1.32; letter-spacing: -.01em; }
+  .honesty-card .q .u { color: var(--accent); }
+  .honesty-card .q .n { color: var(--signal); }
+  .sign { margin-top: 22px; display: flex; align-items: center; gap: 12px; font-family: var(--font-mono); font-size: 13px; color: var(--muted); }
+  .sign .stamp { border: 1.5px solid var(--line-strong); border-radius: 8px; padding: 5px 10px; letter-spacing: .06em; text-transform: uppercase; font-size: 11px; }
+
+  /* newsletter */
+  .news { border-top: 1px solid var(--line); }
+  .news-card { background: var(--ink); color: var(--bg); border-radius: 20px; padding: 44px; display: grid; grid-template-columns: 1.1fr 0.9fr; gap: 36px; align-items: center; }
+  .news-card h2 { font-size: clamp(26px, 3.6vw, 34px); color: var(--bg); }
+  .news-card p { margin-top: 12px; color: color-mix(in srgb, var(--bg) 72%, var(--muted)); font-size: 16px; }
+  .news-form { display: flex; flex-direction: column; gap: 10px; }
+  .news-input { display: flex; gap: 8px; }
+  .news-input input { flex: 1; min-width: 0; font-family: var(--font-body); font-size: 15px; padding: 13px 15px; border-radius: 11px; border: 1px solid color-mix(in srgb, var(--bg) 30%, transparent); background: color-mix(in srgb, var(--bg) 8%, transparent); color: var(--bg); }
+  .news-input input::placeholder { color: color-mix(in srgb, var(--bg) 55%, var(--muted)); }
+  .news-input input:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .news-btn { background: var(--accent); color: #fff; border: none; border-radius: 11px; padding: 13px 20px; font-weight: 600; font-size: 15px; cursor: pointer; font-family: var(--font-body); white-space: nowrap; }
+  .news-btn:hover { background: var(--accent-ink); }
+  .cta-close { display: flex; flex-direction: column; gap: 14px; }
+  .cmd-dark { background: color-mix(in srgb, var(--bg) 8%, transparent); border-color: color-mix(in srgb, var(--bg) 22%, transparent); color: var(--bg); }
+  .cmd-block { align-items: flex-start; overflow-x: auto; }
+  .cmd-block code { white-space: pre; font-family: var(--font-mono); font-size: 13px; line-height: 1.55; }
+  .cmd-block .copy-btn { flex: none; margin-top: 1px; }
+  .cmd-dark .dollar { color: var(--accent); }
+  .cmd-dark .copy-btn { color: color-mix(in srgb, var(--bg) 60%, transparent); }
+  .cmd-dark .copy-btn:hover { color: var(--bg); background: color-mix(in srgb, var(--bg) 12%, transparent); }
+  .cta-close-row { display: flex; flex-wrap: wrap; gap: 10px; }
+  .btn-on-dark { background: transparent; color: var(--bg); border-color: color-mix(in srgb, var(--bg) 32%, transparent); }
+  .btn-on-dark:hover { border-color: var(--accent); color: var(--accent); background: transparent; }
+
+  /* footer */
+  footer { border-top: 1px solid var(--line); padding-block: 40px 48px; }
+  .foot-grid { display: flex; flex-wrap: wrap; gap: 30px; justify-content: space-between; align-items: flex-start; }
+  .foot-brand { max-width: 30ch; }
+  .foot-brand p { color: var(--muted); font-size: 13.5px; margin-top: 10px; }
+  .foot-cols { display: flex; flex-wrap: wrap; gap: 46px; }
+  .foot-col h4 { font-family: var(--font-mono); font-size: 11px; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); margin: 0 0 12px; font-weight: 600; }
+  .foot-col a { display: block; text-decoration: none; color: var(--ink); font-size: 14px; margin-bottom: 8px; }
+  .foot-col a:hover { color: var(--accent); }
+  .foot-bottom { margin-top: 36px; padding-top: 20px; border-top: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 12px; justify-content: space-between; font-size: 12.5px; color: var(--muted); font-family: var(--font-mono); }
+
+  @media (max-width: 900px) {
+    .hero-grid, .thesis-grid, .run-grid, .news-card { grid-template-columns: 1fr; }
+    .hero { padding-block: 44px 24px; }
+    .pillars, .install-grid, .annot { grid-template-columns: 1fr 1fr; }
+    .news-card { padding: 32px; }
+  }
+  @media (max-width: 560px) {
+    .wrap { padding-inline: 18px; }
+    .pillars, .install-grid, .annot, .breakdown { grid-template-columns: 1fr; }
+    .breakdown { grid-template-columns: 1fr 1fr; }
+    .news-input { flex-direction: column; }
+    .foot-grid { flex-direction: column; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .marker { transition: none !important; }
+    * { animation: none !important; }
+  }
+</style>
+
+<nav class="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top">
+      <svg class="mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="2.2" y="2.2" width="19.6" height="19.6" rx="5" stroke="var(--accent)" stroke-width="1.8"/>
+        <path d="M7 15.5 L10.3 9 L13 13 L15 6.5 L17.4 12" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+      </svg>
+      ImpactGate
+    </a>
+    <span class="ver">v0.3.0</span>
+    <div class="nav-links">
+      <a class="hide-sm" href="#thesis">The problem</a>
+      <a class="hide-sm" href="#measure">The measure</a>
+      <a class="hide-sm" href="https://blog.officefloor.net/2026/08/measuring-blast-radius-of-change.html" target="_blank" rel="noopener">Research</a>
+      <a class="nav-cta" href="https://github.com/officefloor/ImpactGate" target="_blank" rel="noopener">
+        <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        GitHub
+      </a>
+    </div>
+  </div>
+</nav>
+
+<main id="top">
+  <!-- HERO -->
+  <section class="hero">
+    <div class="wrap hero-grid">
+      <div>
+        <span class="eyebrow">The change-impact gate</span>
+        <h1>AI <span class="slop">slop</span> is complexity you cannot see.</h1>
+        <p class="lede">ImpactGate scores the structural decay every change adds, and flags the big ones before they cost you a rewrite.</p>
+        <div class="cta-row">
+          <a class="btn btn-primary" href="https://github.com/officefloor/ImpactGate#use-in-github-actions" target="_blank" rel="noopener">
+            <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+            Add the GitHub Action
+          </a>
+          <a class="btn btn-ghost" href="https://blog.officefloor.net/2026/08/measuring-blast-radius-of-change.html" target="_blank" rel="noopener">Read the research
+            <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 8h9M8.5 4l4 4-4 4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          </a>
+        </div>
+        <div class="runners">
+          <span class="rlabel">Also runs in</span>
+          <a href="https://github.com/officefloor/ImpactGate#use-in-gitlab-ci" target="_blank" rel="noopener">GitLab CI</a>
+          <a href="https://github.com/officefloor/ImpactGate#use-in-jenkins" target="_blank" rel="noopener">Jenkins</a>
+          <a href="https://github.com/officefloor/ImpactGate#use-as-a-git-pre-commit-hook" target="_blank" rel="noopener">pre-commit</a>
+          <a href="#install">pip</a>
+          <a href="#install">Docker</a>
+        </div>
+        <div class="trust">
+          <span><span class="dot"></span> On <b>PyPI</b> &amp; <b>GHCR</b></span>
+          <span><span class="dot"></span> Warn or block on merge</span>
+          <span><span class="dot"></span> Studied across <b>20</b> OSS repos</span>
+        </div>
+      </div>
+
+      <!-- score panel -->
+      <div class="panel" aria-label="Example score output">
+        <div class="panel-head">
+          <span class="lights"><i></i><i></i><i></i></span>
+          impact-gate score
+          <span class="pill warn">Warn</span>
+        </div>
+        <div class="panel-body">
+          <div class="change-line">feat: <b>add tiered tax rules</b> &nbsp;·&nbsp; 3 files changed</div>
+          <div class="score-big">184,320</div>
+          <div class="score-sub">change impact &nbsp;·&nbsp; before-context WMC</div>
+
+          <div class="breakdown">
+            <div><div class="k">files</div><div class="v">3</div></div>
+            <div><div class="k">WMC</div><div class="v">47</div></div>
+            <div><div class="k">CC</div><div class="v">12</div></div>
+            <div><div class="k">Δlines</div><div class="v">260</div></div>
+          </div>
+
+          <div class="grade">
+            <div class="grade-top"><span>grade</span><span><b>96th pct</b> · blend w=0.7</span></div>
+            <div class="track">
+              <div class="tick" style="left:90%"></div>
+              <div class="tick" style="left:98%"></div>
+              <div class="marker" id="marker" style="left:12%"></div>
+            </div>
+            <div class="grade-legend"><span>0</span><span>warn 90</span><span>block 98</span></div>
+          </div>
+
+          <div class="refactor">
+            Refactor first &nbsp;<b>billing/invoice.py</b> &nbsp;<span class="share">52%</span> &nbsp;<span style="opacity:.7">god-class growth, WMC 41 → 47</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- THESIS -->
+  <section class="thesis" id="thesis">
+    <div class="wrap">
+      <div class="sec-head" style="margin-bottom:40px">
+        <span class="eyebrow">Why now</span>
+        <h2>The decay is silent. Then it is a rewrite.</h2>
+      </div>
+      <div class="thesis-grid">
+        <div class="prose">
+          <p class="kick">AI is very good at complexity. That is the problem.</p>
+          <p>It keeps piling logic into existing code, because complexity does not slow it down. A god method grows another branch. A god class gains another method. The code still works, so nobody notices.</p>
+          <p>Slowly the system <span class="warnword">decays</span> to where no human can maintain it. Given enough of this, even the AI loses the thread. Every change starts breaking something else.</p>
+          <p>By the time anyone feels the pain, the cheap fix is gone. What is left is an expensive, error-prone refactor, or a full rewrite. ImpactGate scores the decay each change adds, one commit at a time, while it is still small and safe to fix.</p>
+        </div>
+        <div class="chart-card">
+          <div class="cap">Impact per change · one project over time</div>
+          <svg viewBox="0 0 400 240" role="img" aria-label="Chart: change impact rising over time, later changes crossing the block threshold into the decay zone">
+            <!-- decay zone shading above block line -->
+            <rect class="cx-area" x="40" y="26" width="344" height="42"/>
+            <!-- grid -->
+            <line class="cx-grid" x1="40" y1="200" x2="384" y2="200"/>
+            <line class="cx-grid" x1="40" y1="26" x2="40" y2="200"/>
+            <!-- thresholds -->
+            <line class="cx-thresh-block" x1="40" y1="68" x2="384" y2="68"/>
+            <line class="cx-thresh-warn" x1="40" y1="112" x2="384" y2="112"/>
+            <text class="cx-lbl" x="384" y="22" text-anchor="end">decay zone</text>
+            <text class="cx-lbl" x="44" y="64">block</text>
+            <text class="cx-lbl" x="44" y="108">warn</text>
+            <!-- rising impact line -->
+            <path class="cx-line" d="M52 184 L96 176 L140 170 L184 150 L228 132 L272 104 L316 72 L360 48"/>
+            <!-- change dots -->
+            <circle class="cx-dot" cx="52" cy="184" r="4"/>
+            <circle class="cx-dot" cx="96" cy="176" r="4"/>
+            <circle class="cx-dot" cx="140" cy="170" r="4"/>
+            <circle class="cx-dot" cx="184" cy="150" r="4"/>
+            <circle class="cx-dot" cx="228" cy="132" r="4"/>
+            <circle class="cx-dot big" cx="272" cy="104" r="4.5"/>
+            <circle class="cx-dot big" cx="316" cy="72" r="5"/>
+            <circle class="cx-dot big" cx="360" cy="48" r="5.5"/>
+            <text class="cx-lbl" x="52" y="218">early</text>
+            <text class="cx-lbl" x="360" y="218" text-anchor="end">later</text>
+          </svg>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- MEASURE / FORMULA -->
+  <section id="measure">
+    <div class="wrap">
+      <div class="sec-head" style="margin-bottom:34px">
+        <span class="eyebrow">The measure</span>
+        <h2>It weights the complexity already there.</h2>
+        <p>Adding a brand-new file is cheap. Nothing was there before. Piling onto an already-heavy class is expensive. That difference is the decay signal, and it is what the formula measures.</p>
+      </div>
+      <div class="formula-wrap">
+        <div class="formula">
+          impact <span class="op">=</span> <span class="t">files_changed</span> <span class="op">×</span> Σ max(<span class="t">WMC_other</span>, 1) <span class="op">×</span> <span class="t">CC</span> <span class="op">×</span> <span class="s">Δlines</span>
+        </div>
+        <div class="annot">
+          <div><div class="term">files_changed</div><div class="desc">How wide the change reaches across the codebase.</div></div>
+          <div><div class="term">WMC_other</div><div class="desc">Complexity already in the container you are editing, measured before the change.</div></div>
+          <div><div class="term">CC</div><div class="desc">Cyclomatic complexity of the functions you touched.</div></div>
+          <div><div class="term">Δlines</div><div class="desc">How much the change adds to those functions.</div></div>
+        </div>
+        <p class="formula-note"><b>Summed over the changed functions.</b> Because WMC is measured on the pre-change state, importing a fresh file scores near nothing, and growing a god class scores a lot.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- PILLARS -->
+  <section>
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">What it does</span>
+        <h2>A gate built for engineers, not for the marketing deck.</h2>
+      </div>
+      <div class="pillars">
+        <div class="pillar lead">
+          <div class="pnum">01</div>
+          <h3>Catches silent decay</h3>
+          <p>Working code and green tests hide the rot. ImpactGate makes it visible at the moment it is added, while the fix is still one small refactor.</p>
+        </div>
+        <div class="pillar">
+          <div class="pnum">02</div>
+          <h3>Measures the right thing</h3>
+          <p>Complexity accreting into existing structures. Not lines, not churn. The signal that a container is growing into something no one can hold.</p>
+        </div>
+        <div class="pillar">
+          <div class="pnum">03</div>
+          <h3>Honest and tested</h3>
+          <p>Backed by a corpus study across 20 open-source repos, and clear about its limits. It gates structural decay. It does not claim to predict bugs.</p>
+        </div>
+        <div class="pillar">
+          <div class="pnum">04</div>
+          <h3>Grades on a curve</h3>
+          <p>Impact varies by orders of magnitude across languages and projects. So it grades a change by percentile against a real distribution, not a guessed number.</p>
+        </div>
+        <div class="pillar">
+          <div class="pnum">05</div>
+          <h3>Fits your workflow</h3>
+          <p>One pip install. A Docker image. A pre-commit hook. Checks in GitHub, GitLab, and Jenkins. It meets your team where the work already happens.</p>
+        </div>
+        <div class="pillar">
+          <div class="pnum">06</div>
+          <h3>Points at the fix</h3>
+          <p>Every report ranks the files where decay is concentrating. It does not just say no. It tells you exactly where to look first.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- RUN -->
+  <section id="run" style="border-top:1px solid var(--line)">
+    <div class="wrap run-grid">
+      <div>
+        <span class="eyebrow">Where it runs</span>
+        <h2 style="font-size:clamp(26px,3.6vw,36px);margin-top:14px">One measure, everywhere you already gate.</h2>
+        <div class="surfaces">
+          <div class="surface-row">
+            <span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 6l3 4-3 4M10 14h6" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <div><b>Command line</b><p>Score staged, working-tree, or branch-vs-main. Text, JSON, or markdown.</p></div>
+          </div>
+          <div class="surface-row">
+            <span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M10 3v9m0 0l-3-3m3 3l3-3M4 15h12" stroke-linecap="round" stroke-linejoin="round"/></svg></span>
+            <div><b>Pre-commit hook</b><p>Gate every commit locally, before CI ever runs. Warn or block.</p></div>
+          </div>
+          <div class="surface-row">
+            <span class="ic"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="6" cy="6" r="2.2"/><circle cx="14" cy="14" r="2.2"/><path d="M6 8.2v3.6A2.2 2.2 0 0 0 8.2 14H12" stroke-linecap="round"/></svg></span>
+            <div><b>CI checks</b><p>A sticky PR comment on GitHub and GitLab. A pipeline stage on Jenkins. Make it required to gate merges.</p></div>
+          </div>
+        </div>
+      </div>
+      <div class="terminal">
+        <div class="tbar"><i style="background:#FF5F57"></i><i style="background:#FEBC2E"></i><i style="background:#28C840"></i><span class="tt">impact-gate · CI</span></div>
+        <pre><span class="c-dollar">$</span> <span class="c-cmd">impact-gate score --mode range --base origin/main</span>
+
+<span class="c-mut">change impact</span>   <span class="c-white">184,320</span>    <span class="c-mut">grade</span> <span class="c-warn">96th pct</span>  <span class="c-mut">(warn 90 / block 98)</span>
+<span class="c-mut">enforcement</span>    warn   →   <span class="c-ok">ALLOWED</span>
+
+<span class="c-white">Files to consider for refactoring</span>
+  1  billing/invoice.py   <span class="c-warn">52%</span>   <span class="c-mut">god-class growth (WMC 41 → 47)</span>
+  2  billing/tax.py       <span class="c-mut">28%</span>
+  3  api/handlers.py      <span class="c-mut">14%</span>
+
+<span class="c-mut">skipped (diff &gt; max_diff_lines)</span>
+  -  data/fixtures.json
+
+<span class="c-mut">exit 0</span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- INSTALL -->
+  <section class="install" id="install">
+    <div class="wrap">
+      <div class="sec-head">
+        <span class="eyebrow">Start in a minute</span>
+        <h2>Install it, point it at a branch, read the number.</h2>
+      </div>
+      <div class="install-grid">
+        <div class="icard">
+          <div class="lab">Python</div>
+          <h3>pip</h3>
+          <p>Installs the <code>impact-gate</code> command.</p>
+          <div class="code-line">
+            <code><span class="c-dollar">$</span> pip install impact-gate</code>
+            <button class="copy-btn" data-copy="pip install impact-gate" aria-label="Copy pip command">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2H3.5A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="icard">
+          <div class="lab">Any CI</div>
+          <h3>Docker</h3>
+          <p>Git bundled. Mount the repo at <code>/repo</code>.</p>
+          <div class="code-line">
+            <code><span class="c-dollar">$</span> docker run --rm -v "$PWD:/repo" \
+  ghcr.io/officefloor/impact-gate score</code>
+            <button class="copy-btn" data-copy='docker run --rm -v "$PWD:/repo" ghcr.io/officefloor/impact-gate score' aria-label="Copy docker command">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2H3.5A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/></svg>
+            </button>
+          </div>
+        </div>
+        <div class="icard">
+          <div class="lab">GitHub Actions</div>
+          <h3>Action</h3>
+          <p>Pinned to the floating <code>@v0</code> tag.</p>
+          <div class="code-line">
+            <code>- uses: officefloor/ImpactGate@v0
+  with:
+    enforcement: warn</code>
+            <button class="copy-btn" data-copy="- uses: officefloor/ImpactGate@v0&#10;  with:&#10;    enforcement: warn" aria-label="Copy action snippet">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2H3.5A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/></svg>
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- HONESTY -->
+  <section>
+    <div class="wrap">
+      <div class="honesty-card">
+        <span class="eyebrow">On the record</span>
+        <p class="q" style="margin-top:18px">ImpactGate gates <span class="u">change effort and structural decay</span>. It does <span class="n">not</span> predict defects. We ran the study. The measure does not beat file size as a bug predictor, so we do not sell it as one.</p>
+        <div class="sign">
+          <span class="stamp">Corpus study · 20 repos</span>
+          <span>The limits are in the docs, on purpose.</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CLOSING CTA -->
+  <section class="news">
+    <div class="wrap">
+      <div class="news-card">
+        <div>
+          <h2>Score your next change.</h2>
+          <p>One install. Point it at a branch. See what the change really costs before it lands.</p>
+        </div>
+        <div class="cta-close">
+          <div class="cmd cmd-dark cmd-block">
+            <code><span class="dollar">$</span> docker run --rm -v "$PWD:/repo" \
+  ghcr.io/officefloor/impact-gate score</code>
+            <button class="copy-btn" data-copy='docker run --rm -v "$PWD:/repo" ghcr.io/officefloor/impact-gate score' aria-label="Copy docker command">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="5" width="8" height="8" rx="1.5"/><path d="M11 5V3.5A1.5 1.5 0 0 0 9.5 2H3.5A1.5 1.5 0 0 0 2 3.5v6A1.5 1.5 0 0 0 3.5 11H5"/></svg>
+            </button>
+          </div>
+          <div class="cta-close-row">
+            <a class="btn btn-primary" href="https://github.com/officefloor/ImpactGate" target="_blank" rel="noopener">
+              <svg width="15" height="15" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+              Star on GitHub
+            </a>
+            <a class="btn btn-ghost btn-on-dark" href="https://blog.officefloor.net/2026/08/measuring-blast-radius-of-change.html" target="_blank" rel="noopener">Read the research</a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <div class="foot-grid">
+      <div class="foot-brand">
+        <a class="brand" href="#top" style="text-decoration:none">
+          <svg class="mark" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <rect x="2.2" y="2.2" width="19.6" height="19.6" rx="5" stroke="var(--accent)" stroke-width="1.8"/>
+            <path d="M7 15.5 L10.3 9 L13 13 L15 6.5 L17.4 12" stroke="var(--accent)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+          </svg>
+          ImpactGate
+        </a>
+        <p>Measure and gate the structural decay a change introduces. From the makers of OfficeFloor.</p>
+      </div>
+      <div class="foot-cols">
+        <div class="foot-col">
+          <h4>Get it</h4>
+          <a href="https://pypi.org/project/impact-gate/" target="_blank" rel="noopener">PyPI</a>
+          <a href="https://github.com/officefloor/ImpactGate/pkgs/container/impact-gate" target="_blank" rel="noopener">Docker (GHCR)</a>
+          <a href="https://github.com/marketplace" target="_blank" rel="noopener">GitHub Marketplace</a>
+        </div>
+        <div class="foot-col">
+          <h4>Learn</h4>
+          <a href="https://blog.officefloor.net/2026/08/measuring-blast-radius-of-change.html" target="_blank" rel="noopener">The research</a>
+          <a href="https://blog.officefloor.net" target="_blank" rel="noopener">Blog</a>
+          <a href="https://github.com/officefloor/ImpactGate#readme" target="_blank" rel="noopener">Docs</a>
+        </div>
+        <div class="foot-col">
+          <h4>More</h4>
+          <a href="https://github.com/officefloor/ImpactGate" target="_blank" rel="noopener">Source</a>
+          <a href="https://officefloor.net" target="_blank" rel="noopener">OfficeFloor</a>
+        </div>
+      </div>
+    </div>
+    <div class="foot-bottom">
+      <span>© 2026 OfficeFloor · Apache-2.0</span>
+      <span>impact = files × Σ WMC · CC · Δlines</span>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // Copy buttons
+  document.querySelectorAll(".copy-btn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var text = (btn.getAttribute("data-copy") || "").replace(/&#10;/g, "\n");
+      var done = function () {
+        var svg = btn.querySelector("svg");
+        var old = svg.innerHTML;
+        svg.innerHTML = '<path d="M3 8.5l3.2 3.2L13 4.5" stroke-linecap="round" stroke-linejoin="round"/>';
+        btn.style.color = "var(--good)";
+        setTimeout(function () { svg.innerHTML = old; btn.style.color = ""; }, 1300);
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(done).catch(done);
+      } else {
+        var ta = document.createElement("textarea");
+        ta.value = text; document.body.appendChild(ta); ta.select();
+        try { document.execCommand("copy"); } catch (e) {}
+        document.body.removeChild(ta); done();
+      }
+    });
+  });
+
+  // Animate the grade marker into the warn zone on load (settles visible)
+  window.addEventListener("load", function () {
+    var m = document.getElementById("marker");
+    if (!m) return;
+    var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) { m.style.left = "96%"; return; }
+    requestAnimationFrame(function () {
+      setTimeout(function () { m.style.left = "96%"; }, 220);
+    });
+  });
+</script>
+
+</body>
+</html>
