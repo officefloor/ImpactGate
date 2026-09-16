@@ -208,18 +208,3 @@ an agent with Docker, scoring the change against its target branch
 stage fails when impact is too high. Posting the score back to the PR/MR is left to your
 SCM integration; to post it with the tool itself, run `impact-gate comment` in the
 container with the provider's token and env set.
-
-## Roadmap
-
-- Core CLI. Score staged, worktree, or range. Warn or block. Text, JSON, markdown. Done.
-- GitHub Action. Composite action, job-summary report, and a sticky PR comment. Done.
-- Baseline and grading curve. `impact-gate baseline` profiles the project history; the
-  gate blends a seed-corpus prior with the project's own distribution and grades a change
-  by its percentile (`score --curve`). Done.
-- Distribution. `pip install impact-gate`, a `ghcr.io/officefloor/impact-gate` Docker
-  image for any CI, and a version-tagged Action (`@v0`). Done.
-- More CI plugins. A GitLab CI template and a Jenkins pipeline snippet, both wrapping the
-  Docker image (`ci/gitlab-ci.yml`, `ci/Jenkinsfile`). GitLab posts a sticky MR note. Done.
-- Hooks. `impact-gate install-hook` installs a git pre-commit hook, and a
-  `.pre-commit-hooks.yaml` supports the pre-commit framework. Done.
-- IDE. Editor integration over LSP, with a live gauge as you edit.
