@@ -28,6 +28,23 @@ the OfficeFloor blog.
 When impact is too high, the gate asks you to simplify the change or refactor the code
 it touches. It can warn (report only) or block (fail the build).
 
+## Languages
+
+The gate is language agnostic. It scores changes in any of these languages:
+
+Java, C#, C, C++, JavaScript, TypeScript, Python, Go, Kotlin, Swift, Ruby, PHP, Rust,
+Scala, Objective-C, Lua, and TTCN-3.
+
+Complexity is parsed per function by [lizard](https://github.com/terryyin/lizard). A
+mixed language repo is scored the same way throughout.
+
+You can add or remap extensions in the measure config (`lang_by_ext`).
+
+The grading curve is calibrated per language for **Python, Java, TypeScript, C#,
+JavaScript, C, Scala, and Go**. These come from the seed corpus. The other languages are
+still measured and graded. They fall back to a pooled cross-language distribution that
+holds until your project baseline builds up its own history.
+
 ## Install
 
 ```bash
