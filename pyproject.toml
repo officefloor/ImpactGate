@@ -46,7 +46,8 @@ dependencies = [
 dev = ["pytest>=7"]
 
 [project.urls]
-Homepage = "https://github.com/officefloor/ImpactGate"
+Homepage = "https://impactgate.officefloor.net"
+Documentation = "https://github.com/officefloor/ImpactGate#readme"
 Repository = "https://github.com/officefloor/ImpactGate"
 Issues = "https://github.com/officefloor/ImpactGate/issues"
 

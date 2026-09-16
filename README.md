@@ -3,6 +3,8 @@
 Measure and gate the structural decay a change introduces. Run it as a standalone CLI,
 a git pre-commit hook, or a plugin in GitHub, GitLab, and Jenkins CI.
 
+Website: https://impactgate.officefloor.net
+
 Structural decay is complexity accreting into existing structures. A god-method grows
 another branch. A god-class gains another method. The gate scores a change against a
 base (`main` by default) with the change-impact measure:
