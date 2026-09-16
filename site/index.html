@@ -490,7 +490,7 @@
       <div class="sec-head" style="margin-bottom:34px">
         <span class="eyebrow">The measure</span>
         <h2>It weights the complexity already there.</h2>
-        <p>Adding a brand-new file is cheap. Nothing was there before. Piling onto an already-heavy class is expensive. That difference is the decay signal, and it is what the formula measures.</p>
+        <p>Adding a brand-new file is cheap, because there was nothing there to make worse. Adding a complex method to an already-heavy class is expensive. The formula measures that difference, not the raw size of the diff.</p>
       </div>
       <div class="formula-wrap">
         <div class="formula">
@@ -523,7 +523,7 @@
         <div class="pillar">
           <div class="pnum">02</div>
           <h3>Measures the right thing</h3>
-          <p>Complexity accreting into existing structures. Not lines, not churn. The signal that a container is growing into something no one can hold.</p>
+          <p>It measures complexity landing on code that is already complex. Not lines, not churn. That is the sign a file is growing into something no one can hold.</p>
         </div>
         <div class="pillar">
           <div class="pnum">03</div>
