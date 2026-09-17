@@ -30,7 +30,7 @@ class DiffError(RuntimeError):
 
 
 def _git(repo_path: str, *args: str) -> str:
-    out = subprocess.run(["git", "-C", repo_path, *args],
+    out = subprocess.run(["git", "-C", repo_path, "-c", "diff.mnemonicprefix=false", *args],
                          check=True, capture_output=True)
     return out.stdout.decode("utf-8", errors="replace")
 
@@ -102,8 +102,8 @@ def changed_files(repo_path: str, mode: str = "staged",
         # invisible in worktree mode. Include those explicitly (all lines added), so a
         # locally-created file is scored like the added file it will become on commit.
         if mode == "worktree":
-            others = _git(repo_path, "ls-files", "--others", "--exclude-standard")
-            for path in others.split("\n"):
+            others = _git(repo_path, "ls-files", "-z", "--others", "--exclude-standard")
+            for path in others.split("\0"):
                 if not path:
                     continue
                 data = _worktree_bytes(repo_path, path)
