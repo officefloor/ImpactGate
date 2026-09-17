@@ -79,3 +79,12 @@ def test_hunk_body_dash_line_does_not_corrupt_path(repo):
     s = score(repo, mode="staged")
     assert s.files_changed == 1
     assert [f.path for f in s.files] == ["widget.c"]
+
+
+def test_worktree_mode_scores_untracked_non_ascii_file(repo):
+    write(repo, "base.py", BASE)
+    commit(repo, "base")
+    write(repo, "café.py", CHANGED)
+    s = score(repo, mode="worktree")
+    assert s.files_changed == 1
+    assert [f.path for f in s.files] == ["café.py"]
