@@ -28,6 +28,17 @@ the OfficeFloor blog.
 When impact is too high, the gate asks you to simplify the change or refactor the code
 it touches. It can warn (report only) or block (fail the build).
 
+## How this differs from SonarQube (and other static analysis)
+
+SonarQube and linters score the **state** of the code. This file is too complex, this
+method too long, this block duplicated.
+
+ImpactGate scores the **marginal cost of a change**, weighted by what it lands on. The
+`WMC_other` term in the formula is the complexity already in the class *before* you
+touched it. A complex method in a brand new file is cheap. The same method added to a 
+class already carrying five responsibilities is expensive. It's the increment that turns 
+a heavy class into a god class nobody can safely edit.
+
 ## Languages
 
 The gate is language agnostic. It scores changes in any of these languages:
