@@ -1,7 +1,7 @@
 # impact-gate
 
 A merge gate that flags changes piling complexity onto code that is already complex,
-before a class quietly grows into a god-class nobody can safely touch. Run it as a
+before a class quietly grows into a god class nobody can safely touch. Run it as a
 standalone CLI, a git pre-commit hook, or a plugin in GitHub, GitLab, and Jenkins CI.
 
 Website: https://impactgate.officefloor.net
@@ -9,7 +9,7 @@ Website: https://impactgate.officefloor.net
 The pattern it catches is gradual. A class gains one more method, then another, then
 another. Each change looks reasonable on its own. But over dozens of them the class ends
 up doing five different jobs, and every edit gets riskier. That slow accretion is what we
-call structural decay. The gate scores each change against a base (`main` by default), so
+call structural decay (also considered cohesive erosion). The gate scores each change against a base (`main` by default), so
 it shows up while it is still cheap to fix:
 
 ```
@@ -17,8 +17,8 @@ impact = files_changed * Σ max(WMC_other, 1) * CC * Δlines      (over changed 
 ```
 
 `WMC_other` is the complexity that was already in the file or class you are editing,
-measured before your change. Adding a brand-new file is cheap. There was nothing there to
-make worse. Adding a complex method to an already-heavy class is expensive. The gate
+measured before your change. Adding a brand new file is cheap. There was nothing there to
+make worse. Adding a complex method to an already heavy class is expensive. The gate
 measures that difference, not the raw size of the diff.
 
 For the reasoning behind the formula, see [Measuring the Blast Radius of
@@ -42,7 +42,7 @@ You can add or remap extensions in the measure config (`lang_by_ext`).
 
 The grading curve is calibrated per language for **Python, Java, TypeScript, C#,
 JavaScript, C, Scala, and Go**. These come from the seed corpus. The other languages are
-still measured and graded. They fall back to a pooled cross-language distribution that
+still measured and graded. They fall back to a pooled cross language distribution that
 holds until your project baseline builds up its own history.
 
 ## Install
@@ -86,8 +86,8 @@ Exit codes. `0` means ok or warn (the change is allowed). `2` means blocked (imp
 high under `--enforcement block`). `1` means a usage or environment error.
 
 Every report also lists the **files to consider for refactoring**, ranked by their share
-of the impact. The change-level number gates; the per-file ranking points at where the
-decay is concentrating, so a file quietly growing into a god-class surfaces as a
+of the impact. The change level number gates; the per file ranking points at where the
+decay is concentrating, so a file quietly growing into a god class surfaces as a
 candidate before it blocks anything.
 
 A source file whose diff is larger than `max_diff_lines` (200,000 by default, in the
@@ -136,10 +136,10 @@ impact-gate score --curve --warn-percentile 90 --block-percentile 98
 
 The grade blends two distributions:
 
-- a **seed prior** shipped with the tool — per-language percentile tables built from a
-  20-repo open-source corpus, with a pooled fallback for languages not in the table;
-- the **project baseline** — the repo's own per-change distribution, walked from the
-  merged mainline (only landed work; in-flight branches are never reached).
+- a **seed prior** shipped with the tool — per language percentile tables built from a
+  20 repo open source corpus, with a pooled fallback for languages not in the table;
+- the **project baseline** — the repo's own per change distribution, walked from the
+  merged mainline (only landed work; in flight branches are never reached).
 
 The blend weights the project by `w = n / (n + K)`, where `n` is the number of landed
 changes behind the baseline and `K` (`curve_prior_weight`, default 200) is how much
@@ -172,7 +172,7 @@ can dial tolerance without editing the repo. The curve knobs have flags too: `--
 ## Use in GitHub Actions
 
 Add a workflow to your repo. The action scores the PR branch against its base and writes
-a summary. `fetch-depth: 0` is required so the base branch and merge-base are present.
+a summary. `fetch-depth: 0` is required so the base branch and merge base are present.
 
 ```yaml
 name: Change impact
@@ -210,7 +210,7 @@ include:
   - remote: 'https://raw.githubusercontent.com/officefloor/ImpactGate/v0/ci/gitlab-ci.yml'
 ```
 
-It runs on merge-request pipelines, scores the MR against its base
+It runs on merge request pipelines, scores the MR against its base
 (`$CI_MERGE_REQUEST_DIFF_BASE_SHA`) with the published Docker image, and — when a CI/CD
 variable `GITLAB_TOKEN` with the `api` scope is set — posts a sticky note to the MR (one
 note, updated each run). Without the token it still scores and gates; it just skips the
