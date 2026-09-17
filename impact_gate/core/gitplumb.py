@@ -40,7 +40,7 @@ class GitRepo:
         self._batch: subprocess.Popen | None = None
 
     def _run(self, *args: str) -> str:
-        out = subprocess.run(["git", "-C", self.path, *args],
+        out = subprocess.run(["git", "-C", self.path, "-c", "diff.mnemonicprefix=false", *args],
                              check=True, capture_output=True)
         return out.stdout.decode("utf-8", errors="replace")
 
@@ -151,11 +151,25 @@ def _dequote_path(raw: str) -> str:
 def parse_diff(text: str) -> list[FileDiff]:
     files: list[FileDiff] = []
     cur: FileDiff | None = None
+    in_hunk = False
     for line in text.split("\n"):
         if line.startswith("diff --git "):
             cur = FileDiff()
             files.append(cur)
+            in_hunk = False
         elif cur is None:
+            continue
+        elif line.startswith("@@"):
+            in_hunk = True
+            h = _parse_hunk_header(line)
+            if h:
+                if h.old_count > 0:
+                    cur.removed.append((h.old_start, h.old_count))
+                    cur.del_total += h.old_count
+                if h.new_count > 0:
+                    cur.added.append((h.new_start, h.new_count))
+                    cur.add_total += h.new_count
+        elif in_hunk:
             continue
         elif line.startswith("new file"):
             cur.status = "A"
@@ -180,13 +194,4 @@ def parse_diff(text: str) -> list[FileDiff]:
             p = _dequote_path(line[4:].rstrip("\t"))
             if p != "/dev/null":
                 cur.new_path = p[2:] if p.startswith(("a/", "b/")) else p
-        elif line.startswith("@@"):
-            h = _parse_hunk_header(line)
-            if h:
-                if h.old_count > 0:
-                    cur.removed.append((h.old_start, h.old_count))
-                    cur.del_total += h.old_count
-                if h.new_count > 0:
-                    cur.added.append((h.new_start, h.new_count))
-                    cur.add_total += h.new_count
     return files

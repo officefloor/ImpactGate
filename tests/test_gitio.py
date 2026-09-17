@@ -2,7 +2,7 @@
 import pytest
 
 from impact_gate.gitio import DiffError, changed_files
-from gitutil import commit, score, stage, write
+from gitutil import commit, git, score, stage, write
 
 BASE = "def f():\n    return 1\n"
 CHANGED = "def f():\n    return 1\n\ndef g():\n    return 2\n"
@@ -47,3 +47,44 @@ def test_non_source_change_scores_empty(repo):
     commit(repo, "base")
     write(repo, "README.md", "# hi\n\nmore words\n")
     assert score(repo, mode="worktree").empty
+
+
+def test_mnemonicprefix_config_does_not_break_scoring(repo):
+    git(repo, "config", "diff.mnemonicprefix", "true")
+    write(repo, "m.py", BASE)
+    commit(repo, "base")
+    stage(repo, "m.py", CHANGED)
+    s = score(repo, mode="staged")
+    assert s.files_changed == 1
+    assert s.impact > 0
+
+
+def test_non_ascii_and_spaced_filenames_are_scored(repo):
+    write(repo, "café.py", BASE)
+    write(repo, "my file.py", BASE)
+    commit(repo, "base")
+    stage(repo, "café.py", CHANGED)
+    stage(repo, "my file.py", CHANGED)
+    s = score(repo, mode="staged")
+    assert s.files_changed == 2
+    assert sorted(f.path for f in s.files) == ["café.py", "my file.py"]
+
+
+def test_hunk_body_dash_line_does_not_corrupt_path(repo):
+    base = "int widget(int counter) {\n    while (counter) {\n-- counter;\n    }\n    return counter;\n}\n"
+    changed = "int widget(int counter) {\n    while (counter) {\n++ counter;\n    }\n    return counter;\n}\n"
+    write(repo, "widget.c", base)
+    commit(repo, "base")
+    stage(repo, "widget.c", changed)
+    s = score(repo, mode="staged")
+    assert s.files_changed == 1
+    assert [f.path for f in s.files] == ["widget.c"]
+
+
+def test_worktree_mode_scores_untracked_non_ascii_file(repo):
+    write(repo, "base.py", BASE)
+    commit(repo, "base")
+    write(repo, "café.py", CHANGED)
+    s = score(repo, mode="worktree")
+    assert s.files_changed == 1
+    assert [f.path for f in s.files] == ["café.py"]

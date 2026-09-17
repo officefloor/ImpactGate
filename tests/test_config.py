@@ -25,3 +25,11 @@ def test_vendored_change_scores_empty():
     cf = ChangedFile("vendor/lib.go", "M", b"func f(){}\n", b"func f(){return}\n",
                      added=[(1, 1)], removed=[(1, 1)])
     assert score_change([cf]).empty
+
+
+def test_ext_ignores_dots_in_parent_directories():
+    cfg = MeasureConfig()
+    assert cfg.ext("src.dir/Makefile") == ""
+    assert cfg.ext("pkg.v2/app.py") == ".py"
+    assert cfg.ext("app.py") == ".py"
+    assert cfg.ext("Makefile") == ""
