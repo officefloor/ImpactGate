@@ -57,3 +57,14 @@ def test_mnemonicprefix_config_does_not_break_scoring(repo):
     s = score(repo, mode="staged")
     assert s.files_changed == 1
     assert s.impact > 0
+
+
+def test_non_ascii_and_spaced_filenames_are_scored(repo):
+    write(repo, "café.py", BASE)
+    write(repo, "my file.py", BASE)
+    commit(repo, "base")
+    stage(repo, "café.py", CHANGED)
+    stage(repo, "my file.py", CHANGED)
+    s = score(repo, mode="staged")
+    assert s.files_changed == 2
+    assert sorted(f.path for f in s.files) == ["café.py", "my file.py"]
