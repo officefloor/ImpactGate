@@ -30,7 +30,7 @@ class DiffError(RuntimeError):
 
 
 def _git(repo_path: str, *args: str) -> str:
-    out = subprocess.run(["git", "-C", repo_path, *args],
+    out = subprocess.run(["git", "-C", repo_path, "-c", "diff.mnemonicprefix=false", *args],
                          check=True, capture_output=True)
     return out.stdout.decode("utf-8", errors="replace")
 

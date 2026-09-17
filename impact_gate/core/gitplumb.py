@@ -40,7 +40,7 @@ class GitRepo:
         self._batch: subprocess.Popen | None = None
 
     def _run(self, *args: str) -> str:
-        out = subprocess.run(["git", "-C", self.path, *args],
+        out = subprocess.run(["git", "-C", self.path, "-c", "diff.mnemonicprefix=false", *args],
                              check=True, capture_output=True)
         return out.stdout.decode("utf-8", errors="replace")
 
