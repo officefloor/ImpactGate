@@ -111,6 +111,43 @@ def _parse_hunk_header(line: str) -> Hunk | None:
         return None
 
 
+def _dequote_path(raw: str) -> str:
+    """Reverse git's C-style diff path quoting (default core.quotePath=true).
+
+    A path with special or non-ASCII bytes appears wrapped in double quotes with
+    C escapes, e.g. `"caf\303\251.py"` for `café.py`. Returns the raw path
+    unchanged if it isn't quoted.
+    """
+    if len(raw) < 2 or raw[0] != '"' or raw[-1] != '"':
+        return raw
+    body = raw[1:-1]
+    out = bytearray()
+    i = 0
+    simple_escapes = {"\\": "\\", '"': '"', "a": "\a", "b": "\b", "f": "\f",
+                      "n": "\n", "r": "\r", "t": "\t", "v": "\v"}
+    while i < len(body):
+        c = body[i]
+        if c == "\\" and i + 1 < len(body):
+            nxt = body[i + 1]
+            if nxt in "01234567":
+                j = i + 1
+                end = min(j + 3, len(body))
+                k = j
+                while k < end and body[k] in "01234567":
+                    k += 1
+                out.append(int(body[j:k], 8) & 0xFF)
+                i = k
+                continue
+            esc = simple_escapes.get(nxt)
+            if esc is not None:
+                out.extend(esc.encode("utf-8"))
+                i += 2
+                continue
+        out.extend(c.encode("utf-8"))
+        i += 1
+    return out.decode("utf-8", errors="replace")
+
+
 def parse_diff(text: str) -> list[FileDiff]:
     files: list[FileDiff] = []
     cur: FileDiff | None = None
@@ -126,19 +163,21 @@ def parse_diff(text: str) -> list[FileDiff]:
             cur.status = "D"
         elif line.startswith("rename from "):
             cur.status = "R"
-            cur.old_path = line[len("rename from "):]
+            cur.old_path = _dequote_path(line[len("rename from "):])
         elif line.startswith("rename to "):
-            cur.new_path = line[len("rename to "):]
+            cur.new_path = _dequote_path(line[len("rename to "):])
         elif line.startswith("copy to "):
-            cur.new_path = line[len("copy to "):]
+            cur.new_path = _dequote_path(line[len("copy to "):])
         elif line.startswith("Binary files"):
             cur.is_binary = True
         elif line.startswith("--- "):
-            p = line[4:]
+            # An unquoted path containing a space gets a trailing tab sentinel
+            # so the boundary is unambiguous; strip it before dequoting.
+            p = _dequote_path(line[4:].rstrip("\t"))
             if p != "/dev/null":
                 cur.old_path = p[2:] if p.startswith(("a/", "b/")) else p
         elif line.startswith("+++ "):
-            p = line[4:]
+            p = _dequote_path(line[4:].rstrip("\t"))
             if p != "/dev/null":
                 cur.new_path = p[2:] if p.startswith(("a/", "b/")) else p
         elif line.startswith("@@"):
