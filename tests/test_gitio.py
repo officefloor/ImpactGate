@@ -2,7 +2,7 @@
 import pytest
 
 from impact_gate.gitio import DiffError, changed_files
-from gitutil import commit, score, stage, write
+from gitutil import commit, git, score, stage, write
 
 BASE = "def f():\n    return 1\n"
 CHANGED = "def f():\n    return 1\n\ndef g():\n    return 2\n"
@@ -47,3 +47,13 @@ def test_non_source_change_scores_empty(repo):
     commit(repo, "base")
     write(repo, "README.md", "# hi\n\nmore words\n")
     assert score(repo, mode="worktree").empty
+
+
+def test_mnemonicprefix_config_does_not_break_scoring(repo):
+    git(repo, "config", "diff.mnemonicprefix", "true")
+    write(repo, "m.py", BASE)
+    commit(repo, "base")
+    stage(repo, "m.py", CHANGED)
+    s = score(repo, mode="staged")
+    assert s.files_changed == 1
+    assert s.impact > 0
