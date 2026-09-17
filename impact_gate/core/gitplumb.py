@@ -38,6 +38,7 @@ class GitRepo:
     def __init__(self, path: str):
         self.path = path
         self._batch: subprocess.Popen | None = None
+        self._batch_z: bool | None = None
 
     def _run(self, *args: str) -> str:
         out = subprocess.run(["git", "-C", self.path, "-c", "diff.mnemonicprefix=false", *args],
@@ -51,11 +52,26 @@ class GitRepo:
         return parse_diff(text)
 
     # ---- blob streaming via a persistent cat-file --batch -----------------
+    def _supports_batch_z(self) -> bool:
+        # cat-file --batch -Z (NUL-delimited I/O) needs git >= 2.42; older git
+        # exits non-zero on the unknown option. Probe once and fall back to the
+        # newline protocol so older environments keep working (a filename with a
+        # literal newline is then the only case that stays broken).
+        if self._batch_z is None:
+            probe = subprocess.run(
+                ["git", "-C", self.path, "cat-file", "--batch", "-Z"],
+                input=b"", capture_output=True,
+            )
+            self._batch_z = probe.returncode == 0
+        return self._batch_z
+
     def _ensure_batch(self) -> subprocess.Popen:
         if self._batch is None or self._batch.poll() is not None:
+            args = ["git", "-C", self.path, "cat-file", "--batch"]
+            if self._supports_batch_z():
+                args.append("-Z")
             self._batch = subprocess.Popen(
-                ["git", "-C", self.path, "cat-file", "--batch", "-Z"],
-                stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                args, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             )
         return self._batch
 
@@ -77,9 +93,13 @@ class GitRepo:
         """
         proc = self._ensure_batch()
         assert proc.stdin and proc.stdout
-        proc.stdin.write(f"{rev}:{path}\0".encode())
+        z = self._supports_batch_z()
+        proc.stdin.write(f"{rev}:{path}".encode() + (b"\0" if z else b"\n"))
         proc.stdin.flush()
-        header = self._read_until_nul(proc.stdout).decode("utf-8", errors="replace")
+        if z:
+            header = self._read_until_nul(proc.stdout).decode("utf-8", errors="replace")
+        else:
+            header = proc.stdout.readline().decode("utf-8", errors="replace").strip()
         if not header or header.endswith(("missing", "ambiguous")):
             return None
         parts = header.split()
@@ -89,7 +109,7 @@ class GitRepo:
         except ValueError:
             return None
         data = proc.stdout.read(size)
-        proc.stdout.read(1)  # trailing NUL (-Z mode)
+        proc.stdout.read(1)  # trailing NUL (-Z) or newline
         return oid, data
 
     def close(self) -> None:
