@@ -7,6 +7,7 @@ defect-prediction experiment, not to a structural-decay gate.)
 from __future__ import annotations
 
 import fnmatch
+import os
 from dataclasses import dataclass, field
 
 # Extension -> language label. lizard picks its reader by filename, so this table only
@@ -56,8 +57,7 @@ class MeasureConfig:
     max_diff_lines: int = 200_000   # skip pathological mega-diffs (generated dumps)
 
     def ext(self, path: str) -> str:
-        i = path.rfind(".")
-        return path[i:].lower() if i >= 0 else ""
+        return os.path.splitext(path)[1].lower()
 
     def is_source(self, path: str) -> bool:
         return not self.is_ignored(path) and self.ext(path) in self.lang_by_ext
