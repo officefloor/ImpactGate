@@ -68,3 +68,14 @@ def test_non_ascii_and_spaced_filenames_are_scored(repo):
     s = score(repo, mode="staged")
     assert s.files_changed == 2
     assert sorted(f.path for f in s.files) == ["café.py", "my file.py"]
+
+
+def test_hunk_body_dash_line_does_not_corrupt_path(repo):
+    base = "int widget(int counter) {\n    while (counter) {\n-- counter;\n    }\n    return counter;\n}\n"
+    changed = "int widget(int counter) {\n    while (counter) {\n++ counter;\n    }\n    return counter;\n}\n"
+    write(repo, "widget.c", base)
+    commit(repo, "base")
+    stage(repo, "widget.c", changed)
+    s = score(repo, mode="staged")
+    assert s.files_changed == 1
+    assert [f.path for f in s.files] == ["widget.c"]
