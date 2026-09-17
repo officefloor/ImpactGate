@@ -54,10 +54,20 @@ class GitRepo:
     def _ensure_batch(self) -> subprocess.Popen:
         if self._batch is None or self._batch.poll() is not None:
             self._batch = subprocess.Popen(
-                ["git", "-C", self.path, "cat-file", "--batch"],
+                ["git", "-C", self.path, "cat-file", "--batch", "-Z"],
                 stdin=subprocess.PIPE, stdout=subprocess.PIPE,
             )
         return self._batch
+
+    @staticmethod
+    def _read_until_nul(stream) -> bytes:
+        out = bytearray()
+        while True:
+            b = stream.read(1)
+            if not b or b == b"\0":
+                break
+            out += b
+        return bytes(out)
 
     def blob(self, rev: str, path: str) -> tuple[str, bytes] | None:
         """(<blob oid>, contents) of <rev>:<path>, or None if absent.
@@ -67,9 +77,9 @@ class GitRepo:
         """
         proc = self._ensure_batch()
         assert proc.stdin and proc.stdout
-        proc.stdin.write(f"{rev}:{path}\n".encode())
+        proc.stdin.write(f"{rev}:{path}\0".encode())
         proc.stdin.flush()
-        header = proc.stdout.readline().decode("utf-8", errors="replace").strip()
+        header = self._read_until_nul(proc.stdout).decode("utf-8", errors="replace")
         if not header or header.endswith(("missing", "ambiguous")):
             return None
         parts = header.split()
@@ -79,7 +89,7 @@ class GitRepo:
         except ValueError:
             return None
         data = proc.stdout.read(size)
-        proc.stdout.read(1)  # trailing newline
+        proc.stdout.read(1)  # trailing NUL (-Z mode)
         return oid, data
 
     def close(self) -> None:
