@@ -41,9 +41,9 @@ mixed language repo is scored the same way throughout.
 You can add or remap extensions in the measure config (`lang_by_ext`).
 
 The grading curve is calibrated per language for **Python, Java, TypeScript, C#,
-JavaScript, C, Scala, and Go**. These come from the seed corpus. The other languages are
-still measured and graded. They fall back to a pooled cross language distribution that
-holds until your project baseline builds up its own history.
+JavaScript, C, Scala, and Go**. The other languages are still measured and graded. They 
+fall back to a pooled cross language distribution that holds until your project 
+baseline builds up its own history.
 
 ## Install
 
@@ -51,8 +51,7 @@ holds until your project baseline builds up its own history.
 pip install impact-gate         # installs the `impact-gate` command
 ```
 
-Or run it without installing anything, via the published image (git is bundled;
-mount the repo to score at `/repo`):
+Or run it without installing anything, via the published image:
 
 ```bash
 docker run --rm -v "$PWD:/repo" ghcr.io/officefloor/impact-gate \
@@ -86,7 +85,7 @@ Exit codes. `0` means ok or warn (the change is allowed). `2` means blocked (imp
 high under `--enforcement block`). `1` means a usage or environment error.
 
 Every report also lists the **files to consider for refactoring**, ranked by their share
-of the impact. The change level number gates; the per file ranking points at where the
+of the impact. The change level number gates. The per file ranking points at where the
 decay is concentrating, so a file quietly growing into a god class surfaces as a
 candidate before it blocks anything.
 
@@ -105,7 +104,7 @@ impact-gate install-hook
 ```
 
 With `enforcement: block` in `.impact-gate.yml`, a commit whose impact is too high is
-blocked; on `warn` (or off) the report prints and the commit proceeds. Re-run with
+blocked. On `warn` (or off) the report prints and the commit proceeds. Rerun with
 `--force` to overwrite an existing pre-commit hook.
 
 Prefer the [pre-commit](https://pre-commit.com) framework? This repo ships a hook
@@ -121,7 +120,7 @@ repos:
 
 ## Grade against a distribution (the curve)
 
-A raw threshold is hard to set: a typical change's impact varies by orders of magnitude
+A raw threshold is hard to set. A typical change's impact varies by orders of magnitude
 across languages and projects. Instead of guessing a number, grade a change by its
 **percentile** against a distribution, and gate on the percentile.
 
@@ -136,15 +135,15 @@ impact-gate score --curve --warn-percentile 90 --block-percentile 98
 
 The grade blends two distributions:
 
-- a **seed prior** shipped with the tool — per language percentile tables built from a
-  20 repo open source corpus, with a pooled fallback for languages not in the table;
-- the **project baseline** — the repo's own per change distribution, walked from the
-  merged mainline (only landed work; in flight branches are never reached).
+- a **seed prior** shipped with the tool. Per language percentile tables built from
+  20 open source repositories, with a pooled fallback for languages not in the table.
+- the **project baseline** using the repo's own per change distribution, walked from the
+  merged mainline.
 
 The blend weights the project by `w = n / (n + K)`, where `n` is the number of landed
-changes behind the baseline and `K` (`curve_prior_weight`, default 200) is how much
+changes behind the baseline and `K` (`curve_prior_weight`, default 200). It is how much
 history it takes to trust the project over the seed. A fresh repo with no baseline file
-grades on the seed alone; a deep history leans on itself. The grade shows in every
+grades on the seed alone. A deep history leans on itself. The grade shows in every
 format next to the raw number.
 
 ## Configure with `.impact-gate.yml` (repo root)
@@ -166,7 +165,7 @@ baseline_file: .impact-gate-baseline.json   # where `impact-gate baseline` cache
 ```
 
 CLI flags override the file. A CI job can pass `--tolerance` or `--warn-at`. So a team
-can dial tolerance without editing the repo. The curve knobs have flags too: `--curve`,
+can dial tolerance without editing the repo. The curve dials have flags too: `--curve`,
 `--warn-percentile`, `--block-percentile`, `--baseline-file`.
 
 ## Use in GitHub Actions
@@ -197,12 +196,12 @@ jobs:
 
 The score appears in the job summary and as a sticky comment on the PR (one comment,
 updated each run). In `block` mode the job fails when impact exceeds the block threshold.
-Make the check required in branch protection to gate merges. The comment needs
+Make the check required in branch protection to gate merges. Adding the PR comment needs
 `pull-requests: write`. Without it the run still passes and just skips the comment.
 
 ## Use in GitLab CI
 
-A ready-made job is in [`ci/gitlab-ci.yml`](ci/gitlab-ci.yml). Copy it into your
+A ready made job is in [`ci/gitlab-ci.yml`](ci/gitlab-ci.yml). Copy it into your
 `.gitlab-ci.yml`, or include it remotely:
 
 ```yaml
@@ -211,11 +210,10 @@ include:
 ```
 
 It runs on merge request pipelines, scores the MR against its base
-(`$CI_MERGE_REQUEST_DIFF_BASE_SHA`) with the published Docker image, and — when a CI/CD
-variable `GITLAB_TOKEN` with the `api` scope is set — posts a sticky note to the MR (one
-note, updated each run). Without the token it still scores and gates; it just skips the
-note. In `block` enforcement the job fails when impact is too high; make it required in
-the merge request settings to gate merges.
+(`$CI_MERGE_REQUEST_DIFF_BASE_SHA`) with the published Docker image, and posts a sticky note 
+to the MR (one note, updated each run). Without the required `GITLAB_TOKEN` token it still 
+scores and gates. It just skips the note. In `block` enforcement the job fails when impact is 
+too high. Make it required in the merge request settings to gate merges.
 
 ## Use in Jenkins
 
@@ -223,5 +221,5 @@ A pipeline snippet is in [`ci/Jenkinsfile`](ci/Jenkinsfile). It runs the Docker 
 an agent with Docker, scoring the change against its target branch
 (`origin/${CHANGE_TARGET:-main}`) and archiving the report. In `block` enforcement the
 stage fails when impact is too high. Posting the score back to the PR/MR is left to your
-SCM integration; to post it with the tool itself, run `impact-gate comment` in the
+SCM integration. To post it with the tool itself, run `impact-gate comment` in the
 container with the provider's token and env set.
