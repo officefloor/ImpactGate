@@ -159,25 +159,19 @@ format next to the raw number.
 
 ## Gate on cognitive complexity (deeply-nested methods)
 
-Change-impact and the curve both measure *how a change moves*. They cannot see a method that
-is simply hard to read: working code with deep decision nesting. That is the shape AI code
-generators reliably produce, so it is the gate worth adding for AI-augmented work.
+Change-impact and the curve both measure *how a change moves*. It cannot see a method that
+is simply hard to read (working code with deep decision nesting). That is the shape AI code
+generators typically produce.
 
 `--cognitive-max N` turns on an **absolute per-method** gate on **Cognitive Complexity**
-(Campbell 2018): a change blocks when any method in a changed file exceeds `N`. It is
-independent of the impact number — a small diff can pass on impact yet block here for leaving
+(Campbell 2018). A change blocks when any method in a changed file exceeds `N`. It is
+independent of the impact number. A small diff can pass on impact yet block here for leaving
 a tangled method behind.
 
 ```sh
 # Block any change that leaves a method with cognitive complexity over 15 (SonarSource's line).
 impact-gate score --enforcement block --cognitive-max 15
 ```
-
-Cognitive complexity rewards flat, sequential code (long straight-line methods cost nothing)
-and penalises **nesting**: each `if`/loop/`switch`/`catch` costs 1 plus the depth it sits at.
-It is computed across every language lizard parses, as ImpactGate's own implementation of the
-metric, calibrated in the test suite against PMD (Java) and eslint-plugin-sonarjs (TS). Off
-unless set. The output names the offending methods to break up.
 
 ## Configure with `.impact-gate.yml` (repo root)
 
