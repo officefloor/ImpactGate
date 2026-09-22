@@ -22,6 +22,11 @@
     "baseline_file": ".impact-gate-baseline.json"
   },
 
+  "cognitive": {
+    "note": "Absolute per-method Cognitive Complexity (Campbell 2018) gate, independent of the change-impact composite/curve. null = off. When set, any method in a changed file whose cognitive complexity exceeds this value blocks (under 'block' enforcement). SonarSource's default line is 15.",
+    "cognitive_max": null
+  },
+
   "baseline": {
     "note": "How the merged history becomes the per-commit distribution. Walk the first-parent mainline of the merged base branch (only landed work; in-flight branches are never reached). One observation per atomic landed change: a main non-merge commit (its own diff); a leaf MR (net branch-start..tip); a parent MR's direct commits netted per run between merges, each based at the preceding synced base, with child MRs recursing and parent/main syncs skipped. A merge is never scored as its own diff, so a long-running roll-up cannot inflate the numbers. exclude_subject_pattern skips an MR by its merge-commit subject; max_commits caps how many recent mainline commits are walked.",
     "base_ref": "main",

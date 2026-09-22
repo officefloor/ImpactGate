@@ -51,12 +51,18 @@ def _add_score_args(p: argparse.ArgumentParser) -> None:
                         "baseline and the shipped seed. 0 grades PURELY against the "
                         "--baseline-file distribution (ignore the seed); large K leans on "
                         "the seed. Default from config (200).")
+    # cognitive-complexity gate (absolute per-method; independent of the change-impact gate)
+    p.add_argument("--cognitive-max", dest="cognitive_max", type=int,
+                   help="block when any method in a changed file has cognitive complexity "
+                        "(Campbell 2018) above this. Catches deeply-nested, hard-to-read "
+                        "methods the change-impact score cannot see. Off unless set; "
+                        "SonarSource's default line is 15.")
 
 
 # Gate knobs an argparse flag may override on top of the config file, when given.
 _OVERRIDE_ATTRS = ("warn_at", "block_at", "enforcement", "tolerance", "measure_config",
                    "curve_enabled", "baseline_file", "warn_percentile", "block_percentile",
-                   "curve_prior_weight")
+                   "curve_prior_weight", "cognitive_max")
 
 
 def _resolve_config(args) -> GateConfig:
@@ -94,6 +100,12 @@ def _cmd_score(args) -> int:
     else:
         level = cfg.level(score.impact)
         blocked = cfg.blocks(score.impact)
+
+    # Cognitive gate: an ABSOLUTE per-method readability check, OR'd with the change-impact gate.
+    # A change can pass on impact yet block here for leaving a deeply-nested, hard-to-read method.
+    if cfg.cognitive_enabled() and cfg.cognitive_level(score.cognitive_max) == "block":
+        level = "block"
+        blocked = blocked or cfg.blocks_cognitive(score.cognitive_max)
 
     if args.format == "json":
         print(report.render_json(score, cfg, level, args.mode, args.base, blocked, grade))

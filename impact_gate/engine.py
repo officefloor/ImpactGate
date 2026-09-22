@@ -46,6 +46,18 @@ class UnitScore:
 
 
 @dataclass
+class CognitiveUnit:
+    """A function in a changed file with its ABSOLUTE cognitive complexity (Campbell 2018).
+
+    Independent of the change-impact composite: a per-method readability signal over the AFTER
+    version of every file the change touched, consumed by the optional cognitive gate."""
+    path: str
+    name: str
+    container: str
+    cognitive: int
+
+
+@dataclass
 class FileScore:
     path: str
     lang: str
@@ -80,12 +92,34 @@ class ChangeScore:
     files: list[FileScore] = field(default_factory=list)
     units: list[UnitScore] = field(default_factory=list)   # sorted by cost, desc
     skipped: list[SkippedFile] = field(default_factory=list)   # over max_diff_lines
+    cognitive_max: int = 0                                     # worst method (changed files, after)
+    cognitive_units: list[CognitiveUnit] = field(default_factory=list)  # sorted by cognitive, desc
 
     @property
     def empty(self) -> bool:
         # Nothing scored AND nothing skipped: a genuinely empty change. A change whose
         # only source edits were skipped is not empty. The skip must still be reported.
         return self.files_changed == 0 and not self.skipped
+
+
+def _touches(u, added: list[tuple[int, int]]) -> bool:
+    """True if function `u`'s line span overlaps any of the change's NEW-side added ranges
+    (start, count) — i.e. this change added or edited lines inside the function."""
+    for start, count in added:
+        if count <= 0:
+            continue
+        if not (u.end_line < start or u.start_line > start + count - 1):
+            return True
+    return False
+
+
+def _collect_cognitive(c: ChangedFile, after_units) -> list[CognitiveUnit]:
+    """CognitiveUnits for the methods THIS change touched: a new file's methods, or (for a
+    modified file) only functions overlapping the added line ranges. A pre-existing, untouched,
+    already-accepted complex method in the same file is never re-flagged."""
+    new_file = c.before is None
+    return [CognitiveUnit(c.path, u.name, u.container, u.cognitive)
+            for u in after_units if new_file or _touches(u, c.added)]
 
 
 def _parse(mcfg: MeasureConfig, path: str, data: bytes | None):
@@ -125,6 +159,7 @@ def score_change(changed: list[ChangedFile],
     total_mut = total_god = 0
     files: list[FileScore] = []
     units: list[UnitScore] = []
+    cog_units: list[CognitiveUnit] = []
     for c in scored:
         before_src, before_units = _parse(mcfg, c.path, c.before)
         after_src, after_units = _parse(mcfg, c.path, c.after)
@@ -142,9 +177,12 @@ def score_change(changed: list[ChangedFile],
         for u in fi.units:
             units.append(UnitScore(c.path, u.name, u.container, u.cc,
                                    u.wmc_other, u.cost, u.kind))
+        cog_units.extend(_collect_cognitive(c, after_units))
 
     files.sort(key=lambda f: f.cost, reverse=True)
     units.sort(key=lambda u: u.cost, reverse=True)
+    cog_units.sort(key=lambda u: u.cognitive, reverse=True)
+    cognitive_max = cog_units[0].cognitive if cog_units else 0
     composite = (total_mut + total_god) * files_changed
     return ChangeScore(files_changed, total_mut, total_god, composite, files, units,
-                       skipped)
+                       skipped, cognitive_max, cog_units)

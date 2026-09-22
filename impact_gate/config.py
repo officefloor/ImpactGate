@@ -25,12 +25,13 @@ ENFORCEMENTS = ("off", "warn", "block")
 _D = load_defaults()
 _ABS = _D["absolute"]
 _CURVE = _D["curve"]
+_COG = _D.get("cognitive", {"cognitive_max": None})
 
 # The knobs an .impact-gate.yml / CLI flag may override, and their loaders. Absolute and
 # curve knobs share one path so a repo can set either mode's numbers in the same file.
 _SCALAR_KEYS = ("warn_at", "block_at", "enforcement", "tolerance", "measure_config",
                 "curve_enabled", "warn_percentile", "block_percentile",
-                "curve_prior_weight", "baseline_file")
+                "curve_prior_weight", "baseline_file", "cognitive_max")
 
 
 @dataclass
@@ -48,6 +49,11 @@ class GateConfig:
     block_percentile: float = _CURVE["block_percentile"]
     curve_prior_weight: float = _CURVE["prior_weight_K"]  # K in w = n / (n + K)
     baseline_file: str = _CURVE["baseline_file"]      # project distribution cache
+    # Cognitive-complexity gate (Campbell 2018): an ABSOLUTE per-method readability threshold,
+    # independent of the change-impact composite/curve. None = off (the default). When set, ANY
+    # method in a changed file whose cognitive complexity exceeds it blocks — this is the gate
+    # for deeply-nested, hard-to-read methods that the change-impact score cannot see.
+    cognitive_max: int | None = _COG["cognitive_max"]
 
     def effective_warn(self) -> float | None:
         return None if self.warn_at is None else self.warn_at * self.tolerance
@@ -83,6 +89,21 @@ class GateConfig:
         return (self.enforcement == "block"
                 and self.level_for_grade(percentile) == "block")
 
+    def cognitive_enabled(self) -> bool:
+        return self.cognitive_max is not None
+
+    def cognitive_level(self, max_cognitive: int) -> str:
+        """'block' when a method's cognitive complexity exceeds `cognitive_max`, else 'ok'.
+        Independent of the change-impact level; the two are OR'd by the caller."""
+        if self.cognitive_max is not None and max_cognitive > self.cognitive_max:
+            return "block"
+        return "ok"
+
+    def blocks_cognitive(self, max_cognitive: int) -> bool:
+        """Fails the gate on readability only under 'block' enforcement (like `blocks`)."""
+        return (self.enforcement == "block"
+                and self.cognitive_level(max_cognitive) == "block")
+
     @classmethod
     def load(cls, path: str | None = None, repo_path: str = ".") -> "GateConfig":
         """Load from an explicit path, else the first `.impact-gate.y*ml` in repo_path."""
@@ -113,6 +134,8 @@ class GateConfig:
             raise ValueError("warn_percentile must be <= block_percentile")
         if self.curve_prior_weight < 0:
             raise ValueError("curve_prior_weight (K) must be >= 0")
+        if self.cognitive_max is not None and self.cognitive_max <= 0:
+            raise ValueError("cognitive_max must be > 0 (or null to disable)")
 
 
 def _discover(repo_path: str) -> str | None:

@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import lizard
 
+from .cognitive import cognitive_complexity
 from .units import LanguagePlugin, Unit, register
 
 
@@ -30,9 +31,12 @@ class LizardPlugin(LanguagePlugin):
             info = lizard.analyze_file.analyze_source_code(path, src)
         except Exception:
             return []
+        lines = src.split("\n")
+        ext = path.rsplit(".", 1)[-1].lower() if "." in path else ""
         units: list[Unit] = []
         for f in info.function_list:
             container, _short = _container(f.name)
+            body = "\n".join(lines[f.start_line - 1:f.end_line])   # signature + body span
             units.append(Unit(
                 name=f.name,
                 container=container,
@@ -40,6 +44,7 @@ class LizardPlugin(LanguagePlugin):
                 end_line=f.end_line,
                 cc=f.cyclomatic_complexity,
                 nloc=f.nloc,
+                cognitive=cognitive_complexity(body, ext),
             ))
         return units
 
