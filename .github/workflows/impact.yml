@@ -18,3 +18,5 @@ jobs:
       - uses: ./                # the impact-gate action in this repo
         with:
           enforcement: warn     # report only for now; switch to block when ready
+          cognitive-max: 20     # dogfood the readability gate: report methods over this
+                                #   Cognitive Complexity (Campbell 2018). warn = report, never fail.

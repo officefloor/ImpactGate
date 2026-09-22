@@ -113,6 +113,15 @@ def _touches(u, added: list[tuple[int, int]]) -> bool:
     return False
 
 
+def _collect_cognitive(c: ChangedFile, after_units) -> list[CognitiveUnit]:
+    """CognitiveUnits for the methods THIS change touched: a new file's methods, or (for a
+    modified file) only functions overlapping the added line ranges. A pre-existing, untouched,
+    already-accepted complex method in the same file is never re-flagged."""
+    new_file = c.before is None
+    return [CognitiveUnit(c.path, u.name, u.container, u.cognitive)
+            for u in after_units if new_file or _touches(u, c.added)]
+
+
 def _parse(mcfg: MeasureConfig, path: str, data: bytes | None):
     """(source_lines, units) for one file version, or ([], []) when absent/unparsable."""
     if data is None:
@@ -168,14 +177,7 @@ def score_change(changed: list[ChangedFile],
         for u in fi.units:
             units.append(UnitScore(c.path, u.name, u.container, u.cc,
                                    u.wmc_other, u.cost, u.kind))
-        # Cognitive readability gate: scoped to the methods THIS change actually touched — a new
-        # file's methods, or (for a modified file) only functions overlapping the added line
-        # ranges. A pre-existing, untouched, already-accepted complex method in the same file is
-        # never re-flagged, so the gate nags about code you just wrote, not code you inherited.
-        new_file = c.before is None
-        for u in after_units:
-            if new_file or _touches(u, c.added):
-                cog_units.append(CognitiveUnit(c.path, u.name, u.container, u.cognitive))
+        cog_units.extend(_collect_cognitive(c, after_units))
 
     files.sort(key=lambda f: f.cost, reverse=True)
     units.sort(key=lambda u: u.cost, reverse=True)

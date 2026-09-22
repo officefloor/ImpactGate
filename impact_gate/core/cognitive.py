@@ -41,54 +41,69 @@ _NEST_KW = {"if", "for", "foreach", "while", "switch", "catch"}   # +1 + nesting
 _C_TOKEN = re.compile(r"&&|\|\||[{}();]|[A-Za-z_$][A-Za-z0-9_$]*")
 
 
+class _CScan:
+    """Mutable state for the C-family cognitive walk. Each step is a one-liner so the walk
+    loop stays flat (and this scanner stays under its own gate)."""
+
+    def __init__(self) -> None:
+        self.score = 0
+        self.nesting = 0
+        self._brace: list[int] = []      # per '{': the nesting it added (0 or 1)
+        self._pending = 0                # nesting to attach to the next '{'
+        self._last_bool: str | None = None
+        self.prev: str | None = None     # previous token (for do-while tails)
+
+    def boolean(self, op: str) -> None:
+        if op != self._last_bool:        # a run of like operators counts once
+            self.score += 1
+        self._last_bool = op
+
+    def end_bool_run(self) -> None:
+        self._last_bool = None
+
+    def open_brace(self) -> None:
+        self._brace.append(self._pending)
+        self.nesting += self._pending
+        self._pending = 0
+
+    def close_brace(self) -> None:
+        if self._brace:
+            self.nesting -= self._brace.pop()
+
+    def nest(self) -> None:              # if/for/while/switch/catch/do: +1 + depth, block nests
+        self.score += 1 + self.nesting
+        self._pending = 1
+
+    def cont(self) -> None:              # else / else-if: +1, no depth, block nests
+        self.score += 1
+        self._pending = 1
+
+
 def _cognitive_c(source: str) -> int:
     """Brace-nested cognitive complexity for the C family (Java, JS/TS, C/C++, C#, Go, …)."""
-    text = _STRIP.sub(" ", source)
-    toks = _C_TOKEN.findall(text)
-    score = 0
-    nesting = 0
-    brace_nest: list[int] = []   # per '{': how much nesting it contributed (0 or 1)
-    pending = 0                  # nesting to attach to the next '{'
-    last_bool: str | None = None
-    prev: str | None = None      # previous significant token (for do-while tails)
+    toks = _C_TOKEN.findall(_STRIP.sub(" ", source))
+    s = _CScan()
+    # Tokens that reset the boolean run and take a fixed action (order: reset, then act).
+    fixed = {"{": s.open_brace, "}": s.close_brace, "do": s.nest, ";": lambda: None}
     i, n = 0, len(toks)
     while i < n:
         t = toks[i]
-        if t in ("&&", "||"):
-            if t != last_bool:
-                score += 1
-            last_bool = t
-            prev = t
-            i += 1
-            continue
-        # A boolean run only breaks at a statement/expression boundary or a keyword — NOT at
-        # the operands between the operators, so `a && b && c` is one run, not three.
-        if t in (";", "{", "}") or t in _NEST_KW or t in ("do", "else"):
-            last_bool = None
-        if t == "{":
-            brace_nest.append(pending)
-            nesting += pending
-            pending = 0
-        elif t == "}":
-            if brace_nest:
-                nesting -= brace_nest.pop()
-        elif t in _NEST_KW:
-            if t == "while" and prev == "}":
-                pass                         # do { } while(...) tail — already counted at `do`
-            else:
-                score += 1 + nesting
-                pending = 1
-        elif t == "do":
-            score += 1 + nesting
-            pending = 1
+        if t in ("&&", "||"):            # boolean run — operands between operators don't break it
+            s.boolean(t)
+        elif t in fixed:
+            s.end_bool_run()
+            fixed[t]()
         elif t == "else":
-            score += 1                       # else / else-if: +1, no nesting increment
+            s.end_bool_run()
+            s.cont()
             if i + 1 < n and toks[i + 1] == "if":
-                i += 1                        # consume the `if` of `else if`
-            pending = 1
-        prev = t
+                i += 1                    # consume the `if` of `else if`
+        elif t in _NEST_KW and not (t == "while" and s.prev == "}"):   # skip do{}while tail
+            s.end_bool_run()
+            s.nest()
+        s.prev = t
         i += 1
-    return max(score, 0)
+    return max(s.score, 0)
 
 
 _PY_NEST_KW = {"if", "for", "while", "with", "try"}       # +1 + nesting, opens a block
