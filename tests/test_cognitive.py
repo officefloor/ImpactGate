@@ -59,6 +59,27 @@ def test_strings_and_comments_do_not_count():
     assert cc(src, "java") == 0
 
 
+def test_ternary_counts():
+    assert cc("int f(){ return a ? b : c; }", "java") == 1
+    # ternary inside a loop is charged the nesting depth too: for(1) + ternary(1+1) = 3
+    assert cc("void f(){ for(x : xs){ y = a == null ? 1 : 2; } }", "java") == 3
+
+
+def test_ts_optional_syntax_is_not_a_ternary():
+    # These all contain '?' but are NOT ternaries; they must not count.
+    assert cc("function f(){ return a?.b?.c; }", "ts") == 0          # optional chaining
+    assert cc("function f(x?: number){ return x; }", "ts") == 0      # optional parameter
+    assert cc("function f(){ return a ?? b; }", "ts") == 0           # nullish coalescing
+
+
+def test_lambda_body_adds_nesting():
+    # A control structure inside a lambda/callback is charged for its depth (Java -> and JS =>).
+    assert cc("void f(){ xs.forEach(x -> { if(a){ y(); } }); }", "java") == 2
+    assert cc("function f(){ xs.forEach(x => { if(a){ y(); } }); }", "ts") == 2
+    # An expression lambda with no block and no control flow costs nothing.
+    assert cc("const f = () => xs.map(x => x.id);", "ts") == 0
+
+
 # --- the plugin field ---------------------------------------------------------
 
 def test_plugin_sets_unit_cognitive():
