@@ -43,6 +43,43 @@ def _grade_line(grade, cfg: GateConfig) -> str:
             f"{lang}, {_grade_source(grade)})")
 
 
+def _cognitive_offenders(score: ChangeScore, cfg: GateConfig, limit: int = 10):
+    """Methods in changed files whose cognitive complexity exceeds the gate (or [] if off)."""
+    if not cfg.cognitive_enabled():
+        return []
+    return [u for u in score.cognitive_units if u.cognitive > cfg.cognitive_max][:limit]
+
+
+def cognitive_report(score: ChangeScore, cfg: GateConfig) -> dict | None:
+    """The cognitive-gate section for JSON output, or None when the gate is off."""
+    if not cfg.cognitive_enabled():
+        return None
+    offs = _cognitive_offenders(score, cfg)
+    return {
+        "threshold": cfg.cognitive_max,
+        "max": score.cognitive_max,
+        "blocked": bool(offs),
+        "offenders": [{"path": u.path, "name": u.name, "container": u.container,
+                       "cognitive": u.cognitive} for u in offs],
+    }
+
+
+def _cognitive_lines(score: ChangeScore, cfg: GateConfig) -> list[str]:
+    """Text/markdown lines naming the over-limit methods to break up (or [] when none)."""
+    offs = _cognitive_offenders(score, cfg, limit=5)
+    if not offs:
+        return []
+    lines = ["", f"Methods over the cognitive-complexity limit ({cfg.cognitive_max}) — "
+             "break these into smaller methods (reduce nesting/decision depth; "
+             "sequential code is fine):"]
+    for u in offs:
+        container, short = _unit_parts(u)
+        loc = f"{u.path}:{short}" if short else u.path
+        where = f"in {container}" if container else "file scope"
+        lines.append(f"  cognitive {u.cognitive:>4}  {loc}  ({where})")
+    return lines
+
+
 def render_text(score: ChangeScore, cfg: GateConfig, level: str,
                 mode: str, base: str, blocked: bool, grade=None) -> str:
     if score.empty:
@@ -84,6 +121,7 @@ def render_text(score: ChangeScore, cfg: GateConfig, level: str,
             where = f"in {container}" if container else "file scope"
             lines.append(f"  {u.cost:>12,}  {loc}  "
                          f"({where}, CC {u.cc}, WMC_other {u.wmc_other}, {u.kind})")
+    lines.extend(_cognitive_lines(score, cfg))
     return "\n".join(lines)
 
 
@@ -126,6 +164,9 @@ def render_json(score: ChangeScore, cfg: GateConfig, level: str,
             "n": grade.n,
             "language": grade.language,
         }
+    cog = cognitive_report(score, cfg)
+    if cog is not None:
+        out["cognitive"] = cog
     return json.dumps(out, indent=2)
 
 
@@ -185,4 +226,15 @@ def render_markdown(score: ChangeScore, cfg: GateConfig, level: str,
             cls = f"`{container}`" if container else "_file scope_"
             lines.append(f"| {u.cost:,} | {loc} | {cls} | {u.cc} | {u.wmc_other} | "
                          f"{u.kind} |")
+    offs = _cognitive_offenders(score, cfg, limit=5)
+    if offs:
+        lines += ["", f"### Methods over the cognitive-complexity limit ({cfg.cognitive_max})",
+                  "", "Break these into smaller methods — reduce nesting/decision depth "
+                  "(sequential code is fine).", "",
+                  "| cognitive | location | class |", "|---|---|---|"]
+        for u in offs:
+            container, short = _unit_parts(u)
+            loc = f"`{u.path}:{short}`" if short else f"`{u.path}`"
+            cls = f"`{container}`" if container else "_file scope_"
+            lines.append(f"| {u.cognitive} | {loc} | {cls} |")
     return "\n".join(lines)

@@ -18,6 +18,7 @@ class Unit:
     end_line: int
     cc: int            # cyclomatic complexity
     nloc: int
+    cognitive: int = 0  # cognitive complexity (Campbell 2018); 0 if the plugin doesn't compute it
 
 
 class LanguagePlugin:

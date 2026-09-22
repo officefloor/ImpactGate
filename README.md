@@ -157,6 +157,28 @@ history it takes to trust the project over the seed. A fresh repo with no baseli
 grades on the seed alone. A deep history leans on itself. The grade shows in every
 format next to the raw number.
 
+## Gate on cognitive complexity (deeply-nested methods)
+
+Change-impact and the curve both measure *how a change moves*. They cannot see a method that
+is simply hard to read: working code with deep decision nesting. That is the shape AI code
+generators reliably produce, so it is the gate worth adding for AI-augmented work.
+
+`--cognitive-max N` turns on an **absolute per-method** gate on **Cognitive Complexity**
+(Campbell 2018): a change blocks when any method in a changed file exceeds `N`. It is
+independent of the impact number — a small diff can pass on impact yet block here for leaving
+a tangled method behind.
+
+```sh
+# Block any change that leaves a method with cognitive complexity over 15 (SonarSource's line).
+impact-gate score --enforcement block --cognitive-max 15
+```
+
+Cognitive complexity rewards flat, sequential code (long straight-line methods cost nothing)
+and penalises **nesting**: each `if`/loop/`switch`/`catch` costs 1 plus the depth it sits at.
+It is computed across every language lizard parses, as ImpactGate's own implementation of the
+metric, calibrated in the test suite against PMD (Java) and eslint-plugin-sonarjs (TS). Off
+unless set. The output names the offending methods to break up.
+
 ## Configure with `.impact-gate.yml` (repo root)
 
 ```yaml
@@ -165,6 +187,7 @@ block_at: 200000        # impact above which to block
 enforcement: warn       # off, warn, or block. Start on warn. Flip to block when ready.
 tolerance: 1.0          # CI-adjustable multiplier on both thresholds. Above 1 is more lenient.
 # measure_config: .impact-measure.yml   # optional: ignore globs and language overrides
+cognitive_max: 15       # block a method over this Cognitive Complexity (null/omitted = off)
 
 # Grading curve (percentile gate). When enabled, warn_at/block_at are ignored and the
 # gate uses the percentiles below instead.
@@ -174,6 +197,9 @@ block_percentile: 98           # grade at or above this blocks
 curve_prior_weight: 200        # K in w = n/(n+K): history needed to trust the project over the seed
 baseline_file: .impact-gate-baseline.json   # where `impact-gate baseline` caches the distribution
 ```
+
+The cognitive gate is independent of the curve: it can run alongside either the absolute or the
+percentile impact gate, or on its own.
 
 CLI flags override the file. A CI job can pass `--tolerance` or `--warn-at`. So a team
 can dial tolerance without editing the repo. The curve dials have flags too: `--curve`,

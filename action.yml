@@ -23,6 +23,9 @@ inputs:
   tolerance:
     description: "Multiplier applied to both thresholds."
     default: ""
+  cognitive-max:
+    description: "Block when any method in a changed file exceeds this Cognitive Complexity (Campbell 2018). Off unless set; SonarSource's line is 15."
+    default: ""
   config:
     description: "Path to an .impact-gate.yml."
     default: ""
@@ -52,6 +55,7 @@ runs:
         INPUT_WARN_AT: ${{ inputs.warn-at }}
         INPUT_BLOCK_AT: ${{ inputs.block-at }}
         INPUT_TOLERANCE: ${{ inputs.tolerance }}
+        INPUT_COGNITIVE_MAX: ${{ inputs.cognitive-max }}
         INPUT_CONFIG: ${{ inputs.config }}
         DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         GITHUB_TOKEN: ${{ inputs.github-token || github.token }}
@@ -70,6 +74,7 @@ runs:
         if [ -n "$INPUT_WARN_AT" ]; then args+=(--warn-at "$INPUT_WARN_AT"); fi
         if [ -n "$INPUT_BLOCK_AT" ]; then args+=(--block-at "$INPUT_BLOCK_AT"); fi
         if [ -n "$INPUT_TOLERANCE" ]; then args+=(--tolerance "$INPUT_TOLERANCE"); fi
+        if [ -n "$INPUT_COGNITIVE_MAX" ]; then args+=(--cognitive-max "$INPUT_COGNITIVE_MAX"); fi
         if [ -n "$INPUT_CONFIG" ]; then args+=(--config "$INPUT_CONFIG"); fi
 
         report="$RUNNER_TEMP/impact-gate.md"
