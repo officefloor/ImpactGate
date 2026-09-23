@@ -16,10 +16,11 @@ Method (the parts of Campbell's rules that a parser-free scan can carry faithful
   * NESTING increases inside every one of those blocks.
 
 Nesting is tracked by braces for the C family and by indentation for Python-like languages.
-Two documented simplifications keep it parser-free and cross-language robust: the ternary
-``?:`` is not counted (its token is ambiguous with TS optional/nullable syntax), and nested
-lambdas/functions do not add a nesting level. Both under-count slightly and uniformly, which
-a gate threshold absorbs; the calibration tests pin the residual.
+Ternaries (``a ? b : c``) count as +1 plus nesting; the tokenizer separates TS optional
+chaining (``?.``), nullish (``??``) and optional-member (``?:``) so they do not false-fire.
+A lambda body (after ``->`` in Java or ``=>`` in JS/TS) adds a nesting level, so control flow
+inside a stream/callback is charged for its depth. The calibration tests pin the numbers
+against PMD (Java) and hand-verified values.
 """
 from __future__ import annotations
 
@@ -38,7 +39,10 @@ _STRIP = re.compile(
 
 # Control-flow keywords shared across the C family (and most curly-brace languages).
 _NEST_KW = {"if", "for", "foreach", "while", "switch", "catch"}   # +1 + nesting, opens a block
-_C_TOKEN = re.compile(r"&&|\|\||[{}();]|[A-Za-z_$][A-Za-z0-9_$]*")
+# Order matters: the multi-char '?' forms come before the bare '?' so TS optional chaining (?.),
+# nullish (??) and optional-member (?:) are tokenised out and do NOT count as ternaries. Lambda
+# arrows (-> for Java, => for JS/TS) are tokens too, so a lambda body adds a nesting level.
+_C_TOKEN = re.compile(r"\?\?|\?\.|\?:|->|=>|&&|\|\||[?{}();]|[A-Za-z_$][A-Za-z0-9_$]*")
 
 
 class _CScan:
@@ -52,6 +56,7 @@ class _CScan:
         self._pending = 0                # nesting to attach to the next '{'
         self._last_bool: str | None = None
         self.prev: str | None = None     # previous token (for do-while tails)
+        self._arrow = False              # previous token was a lambda arrow (-> / =>)
 
     def boolean(self, op: str) -> None:
         if op != self._last_bool:        # a run of like operators counts once
@@ -61,9 +66,13 @@ class _CScan:
     def end_bool_run(self) -> None:
         self._last_bool = None
 
-    def open_brace(self) -> None:
-        self._brace.append(self._pending)
-        self.nesting += self._pending
+    def ternary(self) -> None:           # a ? b : c — +1 + depth, no block
+        self.score += 1 + self.nesting
+
+    def open_brace(self, lambda_block: bool = False) -> None:
+        add = 1 if (self._pending or lambda_block) else 0   # control block or lambda body nests
+        self._brace.append(add)
+        self.nesting += add
         self._pending = 0
 
     def close_brace(self) -> None:
@@ -83,24 +92,31 @@ def _cognitive_c(source: str) -> int:
     """Brace-nested cognitive complexity for the C family (Java, JS/TS, C/C++, C#, Go, …)."""
     toks = _C_TOKEN.findall(_STRIP.sub(" ", source))
     s = _CScan()
-    # Tokens that reset the boolean run and take a fixed action (order: reset, then act).
-    fixed = {"{": s.open_brace, "}": s.close_brace, "do": s.nest, ";": lambda: None}
     i, n = 0, len(toks)
     while i < n:
         t = toks[i]
+        arrow = s._arrow                 # did a lambda arrow immediately precede this token?
+        s._arrow = False
         if t in ("&&", "||"):            # boolean run — operands between operators don't break it
             s.boolean(t)
-        elif t in fixed:
-            s.end_bool_run()
-            fixed[t]()
+        elif t == "?":                   # ternary (bare '?'; ?. ?? ?: are separate tokens, ignored)
+            s.end_bool_run(); s.ternary()
+        elif t in ("->", "=>"):          # lambda arrow: the block it opens adds a nesting level
+            s._arrow = True
+        elif t == "{":
+            s.end_bool_run(); s.open_brace(lambda_block=arrow)
+        elif t == "}":
+            s.end_bool_run(); s.close_brace()
+        elif t == "do":
+            s.end_bool_run(); s.nest()
         elif t == "else":
-            s.end_bool_run()
-            s.cont()
+            s.end_bool_run(); s.cont()
             if i + 1 < n and toks[i + 1] == "if":
                 i += 1                    # consume the `if` of `else if`
         elif t in _NEST_KW and not (t == "while" and s.prev == "}"):   # skip do{}while tail
+            s.end_bool_run(); s.nest()
+        elif t == ";":
             s.end_bool_run()
-            s.nest()
         s.prev = t
         i += 1
     return max(s.score, 0)
