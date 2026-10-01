@@ -23,7 +23,8 @@ measures that difference, not the raw size of the diff.
 
 For the reasoning behind the formula, see [Measuring the Blast Radius of
 Change](https://blog.officefloor.net/2026/08/measuring-blast-radius-of-change.html) on
-the OfficeFloor blog.
+the OfficeFloor blog. For the design philosophy, why ImpactGate scores placement and
+deliberately leaves duplication to review, see [REASONING.md](./REASONING.md).
 
 When impact is too high, the gate asks you to simplify the change or refactor the code
 it touches. It can warn (report only) or block (fail the build).
@@ -38,6 +39,12 @@ ImpactGate scores the **marginal cost of a change**, weighted by what it lands o
 touched it. A complex method in a brand new file is cheap. The same method added to a 
 class already carrying five responsibilities is expensive. It's the increment that turns 
 a heavy class into a god class nobody can safely edit.
+
+Duplication is one of the "state" findings in that first list, and ImpactGate does **not**
+score it. That is deliberate, not an omission. Whether a given copy is harmful duplication
+or a legitimate separate decision is a design judgment that no deterministic signal can make
+without noise. [REASONING.md](./REASONING.md) explains why, and where duplication belongs
+instead.
 
 ## Languages
 
