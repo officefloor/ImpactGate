@@ -126,8 +126,19 @@ def test_cognitive_scoped_to_changed_methods_only(repo):
 
 # --- the gate -----------------------------------------------------------------
 
-def test_gate_off_by_default():
-    assert GateConfig().cognitive_enabled() is False
+def test_gate_on_by_default_at_20():
+    # The cognitive gate is ON by default at a limit of 20, in warn (never fails the build).
+    cfg = GateConfig()
+    assert cfg.cognitive_enabled() is True
+    assert cfg.cognitive_max == 20
+    assert cfg.measure_mode("cognitive") == "warn"
+    assert cfg.blocks_cognitive(999) is False       # on, but warn -> never fails the gate
+
+
+def test_gate_switched_off():
+    # Two ways to switch it off: the cognitive measure's enforcement, or clearing the limit.
+    assert GateConfig(cognitive_enforcement="off").cognitive_enabled() is False
+    assert GateConfig(cognitive_max=None).cognitive_enabled() is False
 
 
 def test_gate_blocks_strictly_over_threshold():
@@ -170,5 +181,6 @@ def test_json_omits_cognitive_when_off(repo):
     commit(repo, "init")
     stage(repo, "D.java", _NESTED4)
     s = score(repo, "worktree")
-    out = json.loads(report.render_json(s, GateConfig(), "ok", "worktree", "main", False))
+    cfg = GateConfig(cognitive_enforcement="off")     # the measure switched off
+    out = json.loads(report.render_json(s, cfg, "ok", "worktree", "main", False))
     assert "cognitive" not in out

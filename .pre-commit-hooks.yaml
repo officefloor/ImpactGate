@@ -9,11 +9,13 @@
 #         - id: impact-gate
 #
 # pre-commit installs impact-gate into an isolated environment and runs it in staged
-# mode on each commit. A 'block' verdict (exit 2) aborts the commit; ok/warn let it
-# proceed. Configure thresholds and enforcement in the project's .impact-gate.yml.
+# mode on each commit. It runs all three measures (change impact, cognitive complexity,
+# coupling divergence), all in warn by default, so a fresh install never aborts a commit.
+# A 'block' verdict (exit 2) aborts the commit; ok/warn let it proceed. Turn blocking on,
+# globally or per measure, in the project's .impact-gate.yml (enforcement / *_enforcement).
 - id: impact-gate
   name: impact-gate
-  description: Gate the structural change-impact of the staged change.
+  description: Gate the staged change on change impact, cognitive complexity, and coupling divergence.
   entry: impact-gate score --mode staged
   language: python
   pass_filenames: false

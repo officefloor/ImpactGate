@@ -21,15 +21,22 @@ asks you to simplify or refactor. It can warn (report only) or block (fail the b
 
 ## Measures
 
-ImpactGate is built on two placement measures. Both hold that the harm is where complexity
-and coupling concentrate, not the total amount.
+ImpactGate runs three structural measures on every change. Each is a different lens on a
+different way a change can quietly make a codebase worse, and they hold the same conviction:
+the harm is where complexity and coupling concentrate, not the total amount.
 
-- **[Change Impact](./doc/change-impact.md)** — the gate. The marginal cost of a change,
-  weighted by what it lands on (`WMC_other`). This is what `impact-gate score` computes.
-- **[Coupling Divergence](./doc/coupling-divergence.md)** — the placement check. The method
-  or class that *manufactures* coupling, a god or orchestrator, found as an outlier in the
-  net information flow it creates over the control flow. A complementary axis to the impact
-  score; see `impact_gate/placement_check.py`.
+- **[Change Impact](./doc/change-impact.md)** — the blast radius of a change. The marginal
+  cost of a change, weighted by what it lands on (`WMC_other`).
+- **[Cognitive Complexity](./doc/cognitive-complexity.md)** — per-method readability. Flags a
+  single method a change leaves too deeply nested to follow (Campbell 2018).
+- **[Coupling Divergence](./doc/coupling-divergence.md)** — the placement of coupling. The
+  method or class that *manufactures* coupling, a god or orchestrator, found as an outlier in
+  the net information flow it creates over the control flow.
+
+**All three run by default, all in `warn`** — reported, never failing a build until you ask.
+Turn blocking on globally (`enforcement: block`) or for one measure, and switch any measure
+off, globally or per run. How the three cover each other's blind spots, and the full
+configuration, is in **[doc/coverage.md](./doc/coverage.md)**.
 
 ## How this differs from SonarQube (and other static analysis)
 
@@ -156,31 +163,52 @@ history it takes to trust the project over the seed. A fresh repo with no baseli
 grades on the seed alone. A deep history leans on itself. The grade shows in every
 format next to the raw number.
 
-## Gate on cognitive complexity (deeply-nested methods)
+## Cognitive complexity and coupling divergence (on by default)
 
-Change-impact and the curve both measure *how a change moves*. It cannot see a method that
-is simply hard to read (working code with deep decision nesting). That is the shape AI code
-generators typically produce.
+Change-impact and the curve both measure *how a change moves*. They cannot see a method that
+is simply hard to read (working code with deep decision nesting — the shape AI code
+generators typically produce), nor the low-complexity orchestrator that wires everything
+together. Two more measures cover those, and both run on every `impact-gate score`:
 
-`--cognitive-max N` turns on an **absolute per-method** gate on **Cognitive Complexity**
-(Campbell 2018). A change blocks when any method in a changed file exceeds `N`. It is
-independent of the impact number. A small diff can pass on impact yet block here for leaving
-a tangled method behind.
+- **[Cognitive Complexity](./doc/cognitive-complexity.md)** — an absolute per-method gate
+  (Campbell 2018). Flags any method a change leaves over the limit (default **20**;
+  SonarSource's line is 15). Independent of the impact number: a small diff can pass on
+  impact yet be flagged here for a tangled method.
+- **[Coupling Divergence](./doc/coupling-divergence.md)** — the placement check. Flags a
+  changed method or class that is a coupling-generation outlier in the resulting tree.
+
+Both default to `warn` like the impact gate. Block on them, globally or selectively:
 
 ```sh
-# Block any change that leaves a method with cognitive complexity over 15 (SonarSource's line).
-impact-gate score --enforcement block --cognitive-max 15
+# warn on everything (the default) — nothing fails
+impact-gate score
+
+# block on just the readability and coupling signals, leave change-impact advisory
+impact-gate score --cognitive block --coupling block
+
+# tighten the cognitive limit, or switch a measure off for this run
+impact-gate score --cognitive-max 15
+impact-gate score --coupling off
 ```
+
+See **[doc/coverage.md](./doc/coverage.md)** for how the three measures cover each other's
+blind spots.
 
 ## Configure with `.impact-gate.yml` (repo root)
 
 ```yaml
 warn_at: 50000          # impact above which to warn
 block_at: 200000        # impact above which to block
-enforcement: warn       # off, warn, or block. Start on warn. Flip to block when ready.
+enforcement: warn       # default for ALL THREE measures: off, warn, or block. Start on warn.
 tolerance: 1.0          # CI-adjustable multiplier on both thresholds. Above 1 is more lenient.
 # measure_config: .impact-measure.yml   # optional: ignore globs and language overrides
-cognitive_max: 15       # block a method over this Cognitive Complexity (null/omitted = off)
+cognitive_max: 20       # Cognitive Complexity limit (on by default; null switches it off)
+
+# Per-measure enforcement. Each is off | warn | block, or omitted to inherit `enforcement`.
+# This is how you block on all measures (enforcement: block) or selectively, and turn one off.
+change_impact_enforcement: null   # inherit the default (warn)
+cognitive_enforcement: null       # inherit the default (warn)
+coupling_enforcement: null        # inherit the default (warn)
 
 # Grading curve (percentile gate). When enabled, warn_at/block_at are ignored and the
 # gate uses the percentiles below instead.
@@ -191,8 +219,8 @@ curve_prior_weight: 200        # K in w = n/(n+K): history needed to trust the p
 baseline_file: .impact-gate-baseline.json   # where `impact-gate baseline` caches the distribution
 ```
 
-The cognitive gate is independent of the curve: it can run alongside either the absolute or the
-percentile impact gate, or on its own.
+The cognitive and coupling measures are independent of the curve: they run alongside either
+the absolute or the percentile impact gate.
 
 CLI flags override the file. A CI job can pass `--tolerance` or `--warn-at`. So a team
 can dial tolerance without editing the repo. The curve dials have flags too: `--curve`,

@@ -80,8 +80,44 @@ def _cognitive_lines(score: ChangeScore, cfg: GateConfig) -> list[str]:
     return lines
 
 
+def _coupling_lines(coupling: dict | None, cfg: GateConfig) -> list[str]:
+    """Text/markdown lines for the coupling-divergence placement check (or [] when the
+    measure is off or produced no result). Advisory in 'warn', a gate in 'block'."""
+    if coupling is None or not cfg.coupling_enabled():
+        return []
+    mf, cf = coupling["method_vortex_flags"], coupling["class_vortex_files"]
+    mode = cfg.measure_mode("coupling")
+    if not mf and not cf:
+        return ["", f"Coupling divergence [{mode}]: no coupling vortex among the "
+                f"{coupling['changed_functions']} changed function(s)."]
+    verb = "fails the gate" if mode == "block" else "review (advisory)"
+    lines = ["", f"Coupling divergence [{mode}]: this change touches a coupling vortex "
+             f"— the orchestrator the size score can miss. {verb}:"]
+    for f in sorted(mf, key=lambda x: -x.gain):
+        lines.append(f"  method  gain {f.gain:>4}  {f.name}  ({f.path})")
+    for p in cf:
+        lines.append(f"  class   cumulated-generation outlier  {p}")
+    return lines
+
+
+def coupling_report(coupling: dict | None, cfg: GateConfig) -> dict | None:
+    """The coupling section for JSON output, or None when the measure is off / no result."""
+    if coupling is None or not cfg.coupling_enabled():
+        return None
+    mf = coupling["method_vortex_flags"]
+    return {
+        "enforcement": cfg.measure_mode("coupling"),
+        "changed_functions": coupling["changed_functions"],
+        "changed_files": coupling["changed_files"],
+        "has_vortex": bool(mf or coupling["class_vortex_files"]),
+        "method_vortices": [{"path": f.path, "name": f.name, "gain": f.gain}
+                            for f in sorted(mf, key=lambda x: -x.gain)],
+        "class_vortices": list(coupling["class_vortex_files"]),
+    }
+
+
 def render_text(score: ChangeScore, cfg: GateConfig, level: str,
-                mode: str, base: str, blocked: bool, grade=None) -> str:
+                mode: str, base: str, blocked: bool, grade=None, coupling=None) -> str:
     if score.empty:
         return "impact-gate: no source changes to score."
     # Tag reflects the OUTCOME under the current enforcement, not just the severity.
@@ -122,11 +158,12 @@ def render_text(score: ChangeScore, cfg: GateConfig, level: str,
             lines.append(f"  {u.cost:>12,}  {loc}  "
                          f"({where}, CC {u.cc}, WMC_other {u.wmc_other}, {u.kind})")
     lines.extend(_cognitive_lines(score, cfg))
+    lines.extend(_coupling_lines(coupling, cfg))
     return "\n".join(lines)
 
 
 def render_json(score: ChangeScore, cfg: GateConfig, level: str,
-                mode: str, base: str, blocked: bool, grade=None) -> str:
+                mode: str, base: str, blocked: bool, grade=None, coupling=None) -> str:
     thresholds = {
         "warn": cfg.effective_warn(),
         "block": cfg.effective_block(),
@@ -167,11 +204,14 @@ def render_json(score: ChangeScore, cfg: GateConfig, level: str,
     cog = cognitive_report(score, cfg)
     if cog is not None:
         out["cognitive"] = cog
+    coup = coupling_report(coupling, cfg)
+    if coup is not None:
+        out["coupling"] = coup
     return json.dumps(out, indent=2)
 
 
 def render_markdown(score: ChangeScore, cfg: GateConfig, level: str,
-                    mode: str, base: str, blocked: bool, grade=None) -> str:
+                    mode: str, base: str, blocked: bool, grade=None, coupling=None) -> str:
     """GitHub/GitLab-friendly summary. Written to the CI job summary."""
     if score.empty:
         return "**impact-gate:** no source changes to score."
@@ -237,4 +277,17 @@ def render_markdown(score: ChangeScore, cfg: GateConfig, level: str,
             loc = f"`{u.path}:{short}`" if short else f"`{u.path}`"
             cls = f"`{container}`" if container else "_file scope_"
             lines.append(f"| {u.cognitive} | {loc} | {cls} |")
+    if coupling is not None and cfg.coupling_enabled():
+        mf, cf = coupling["method_vortex_flags"], coupling["class_vortex_files"]
+        cmode = cfg.measure_mode("coupling")
+        if mf or cf:
+            verb = "fails the gate" if cmode == "block" else "advisory — review"
+            lines += ["", f"### Coupling divergence (`{cmode}`) — {verb}", "",
+                      "The change touches a coupling vortex: the orchestrator that "
+                      "manufactures flow, which the size score can miss.", "",
+                      "| kind | gain | location |", "|---|---|---|"]
+            for f in sorted(mf, key=lambda x: -x.gain):
+                lines.append(f"| method | {f.gain} | `{f.path}:{f.name}` |")
+            for p in cf:
+                lines.append(f"| class | — | `{p}` |")
     return "\n".join(lines)

@@ -86,6 +86,12 @@ def check(repo: str, mode: str, base: str) -> dict:
     }
 
 
+def has_vortex(result: dict) -> bool:
+    """True when the change touches at least one coupling vortex (a method generation
+    outlier or a class-cumulated outlier). The gate's one-bit summary of the result."""
+    return bool(result.get("method_vortex_flags") or result.get("class_vortex_files"))
+
+
 def render(result: dict) -> str:
     lines = []
     mf, cf = result["method_vortex_flags"], result["class_vortex_files"]

@@ -1,5 +1,5 @@
 name: "impact-gate"
-description: "Measure and gate the structural change-impact of a pull request."
+description: "Gate a pull request on three structural measures: change impact, cognitive complexity, and coupling divergence (all on, warn by default)."
 branding:
   icon: "activity"
   color: "purple"
@@ -12,7 +12,16 @@ inputs:
     description: "Base ref for range mode. Defaults to the PR base (origin/<base_ref>)."
     default: ""
   enforcement:
-    description: "off, warn, or block. Overrides .impact-gate.yml."
+    description: "Default enforcement for ALL three measures: warn (report only, the default), block (fail the build), or off. Per-measure inputs below override it."
+    default: ""
+  change-impact:
+    description: "Enforcement for the change-impact score: off, warn, or block. Overrides enforcement for this measure."
+    default: ""
+  cognitive:
+    description: "Enforcement for the cognitive-complexity gate: off, warn, or block. Overrides enforcement for this measure."
+    default: ""
+  coupling:
+    description: "Enforcement for the coupling-divergence placement check: off, warn, or block. Overrides enforcement for this measure."
     default: ""
   warn-at:
     description: "Impact above which to warn."
@@ -24,7 +33,7 @@ inputs:
     description: "Multiplier applied to both thresholds."
     default: ""
   cognitive-max:
-    description: "Block when any method in a changed file exceeds this Cognitive Complexity (Campbell 2018). Off unless set; SonarSource's line is 15."
+    description: "Cognitive Complexity (Campbell 2018) limit; a method in a changed file over it is flagged. On by default at 20 (SonarSource's line is 15); set 'cognitive: off' to disable the gate."
     default: ""
   config:
     description: "Path to an .impact-gate.yml."
@@ -52,6 +61,9 @@ runs:
         INPUT_MODE: ${{ inputs.mode }}
         INPUT_BASE: ${{ inputs.base }}
         INPUT_ENFORCEMENT: ${{ inputs.enforcement }}
+        INPUT_CHANGE_IMPACT: ${{ inputs.change-impact }}
+        INPUT_COGNITIVE: ${{ inputs.cognitive }}
+        INPUT_COUPLING: ${{ inputs.coupling }}
         INPUT_WARN_AT: ${{ inputs.warn-at }}
         INPUT_BLOCK_AT: ${{ inputs.block-at }}
         INPUT_TOLERANCE: ${{ inputs.tolerance }}
@@ -71,6 +83,9 @@ runs:
         fi
         args=(score --repo . --mode "$INPUT_MODE" --base "$BASE")
         if [ -n "$INPUT_ENFORCEMENT" ]; then args+=(--enforcement "$INPUT_ENFORCEMENT"); fi
+        if [ -n "$INPUT_CHANGE_IMPACT" ]; then args+=(--change-impact "$INPUT_CHANGE_IMPACT"); fi
+        if [ -n "$INPUT_COGNITIVE" ]; then args+=(--cognitive "$INPUT_COGNITIVE"); fi
+        if [ -n "$INPUT_COUPLING" ]; then args+=(--coupling "$INPUT_COUPLING"); fi
         if [ -n "$INPUT_WARN_AT" ]; then args+=(--warn-at "$INPUT_WARN_AT"); fi
         if [ -n "$INPUT_BLOCK_AT" ]; then args+=(--block-at "$INPUT_BLOCK_AT"); fi
         if [ -n "$INPUT_TOLERANCE" ]; then args+=(--tolerance "$INPUT_TOLERANCE"); fi

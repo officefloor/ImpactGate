@@ -1,9 +1,8 @@
 # Change Impact
 
-Change Impact is the measure ImpactGate's gate is built on. It scores the marginal cost of a
-change, weighted by what the change lands on, so a class growing into a god class surfaces
-while it is still cheap to fix. It is a companion to [Coupling Divergence](./coupling-divergence.md),
-which scores where coupling is manufactured in the code itself.
+Change Impact scores the marginal cost of a change, weighted by what the change lands on, so
+a class growing into a god class surfaces while it is still cheap to fix. It is the measure
+ImpactGate's gate is built on.
 
 ## The pattern it catches
 
@@ -31,15 +30,12 @@ For the reasoning behind the formula, see
 on the OfficeFloor blog. For the design philosophy, why ImpactGate scores placement and
 deliberately leaves duplication to review, see [REASONING.md](../REASONING.md).
 
-When impact is too high, the gate asks you to simplify the change or refactor the code it
-touches. It can warn (report only) or block (fail the build).
-
 ## How this differs from SonarQube and other static analysis
 
 SonarQube and linters score the state of the code. This file is too complex, this method too
 long, this block duplicated.
 
-ImpactGate scores the marginal cost of a change, weighted by what it lands on. The
+Change Impact scores the marginal cost of a change, weighted by what it lands on. The
 `WMC_other` term is the complexity already in the class before you touched it. A complex
 method in a brand new file is cheap. The same method added to a class already carrying five
 responsibilities is expensive. It is the increment that turns a heavy class into a god class
@@ -50,12 +46,27 @@ deliberate, not an omission. Whether a given copy is harmful duplication or a le
 separate decision is a design judgment no deterministic signal can make without noise.
 [REASONING.md](../REASONING.md) explains why, and where duplication belongs instead.
 
-## Placement, the shared idea
+## Placement, not amount
 
 Change Impact is a placement measure. Measured four ways, the total complexity of a codebase
 is roughly conserved, which is Tesler's law. What differs between a maintainable system and a
 decaying one is not the total but where the complexity is placed, and whether each change
 piles more onto the places that are already heavy. Change Impact scores that placement for a
-change. Coupling Divergence scores a related placement in the code, where information flow is
-created and concentrated. Both say the same thing: the harm is the concentration, not the
-amount.
+change: the harm is the concentration, not the amount.
+
+## Running it
+
+Change Impact runs on every `impact-gate score` and is **on by default in warn**: it reports
+the number and the files to look at, and never fails the build until you ask it to. It gates
+in absolute mode on `warn_at` / `block_at`, or on a percentile grade in curve mode.
+
+```yaml
+# .impact-gate.yml
+block_at: 50000            # impact above which a change is over the line
+change_impact_enforcement: block   # fail the build on it (omit to inherit the global default)
+```
+
+Switch it off for a run with `--change-impact off` (the number is still reported, it just
+stops contributing to the verdict), or block on it with `--change-impact block`. For how
+Change Impact sits alongside the cognitive-complexity and coupling-divergence measures, and
+why all three run together, see [coverage.md](./coverage.md).

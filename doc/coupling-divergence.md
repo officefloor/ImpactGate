@@ -2,9 +2,8 @@
 
 Coupling Divergence is a placement measure that flags the one method or class that
 *manufactures* coupling, the orchestrator that everything flows out of, rather than code
-that is merely large or complex. It is a companion to [Change Impact](./change-impact.md).
-Where Change Impact scores the blast radius of a change, Coupling Divergence scores where
-information flow is created and concentrated in the code itself.
+that is merely large or complex. It scores where information flow is created and
+concentrated in the code itself.
 
 ## Two flows, and one that is not conserved
 
@@ -86,44 +85,30 @@ internal-only rule is what excludes the converter and the row mapper with no typ
 at all. They push their columns onto a SQL call that leaves the system, so their `out` is
 near zero and their divergence is not positive.
 
-## Why this is the same philosophy as Change Impact
-
-The two measures are built on one idea, that placement is what matters, not raw size.
-
-```
-Change Impact       impact = files_changed · Σ max(WMC_other, 1) · CC · Δlines
-Coupling Divergence δ      = out − in            (god = outlier of δ)
-```
-
-Change Impact asks where a change piles complexity onto code that is already complex. Its
-`WMC_other` term is the complexity already in the unit before the edit, so a complex method
-in a new file is cheap and the same method added to a heavy class is expensive. It weights a
-change by what it lands on.
-
-Coupling Divergence asks where information flow is created and concentrated. It weights a
-method by what it manufactures over the control flow. Both reject the idea that the total is
-the problem. Both locate the concentration instead. They are two axes of the same placement
-philosophy.
-
-They are complementary, not the same signal, and that is the point of running both. Change
-Impact catches complexity piled onto complexity. Divergence catches the orchestrator that
-manufactures flow even when its own cyclomatic complexity is low, a dispatcher that is CC 4
-but wires everything together. And divergence stays silent on a self-contained complex
-algorithm, a parser or a date routine that is CC 30 and `δ` 0, because that is essential
-complexity, not accidental coupling. Change Impact would flag that algorithm on size.
-Divergence correctly does not. Reported side by side, the two cover both the complexity a
-change adds and the coupling it concentrates, and they are kept as two numbers rather than
-blended, because they measure different things.
-
 ## How it is used
 
 - **Detection (a snapshot).** Run it on a tree and flag the divergence outliers. No history
   is needed, because a spike is visible the instant the method exists.
 - **Per change (in ImpactGate).** Flag the added or mutated methods that are divergence
-  outliers in the resulting tree, reported beside the impact score as a second signal. See
-  `impact_gate/placement_check.py`.
+  outliers in the resulting tree. See `impact_gate/placement_check.py`.
 - **Live monitor.** Re-run it per commit. A unit crossing into outlier status is a vortex
   forming under the current edits, which is the signal to watch in an AI-augmented pipeline.
+
+## Running it
+
+Coupling Divergence runs on every `impact-gate score` and is **on by default in warn**: when
+the change adds or mutates a method that is a generation outlier in the resulting tree, it is
+reported beside the score as a second signal, and never fails the build until you ask it to.
+
+```yaml
+# .impact-gate.yml
+coupling_enforcement: block   # fail the build when a change touches a coupling vortex
+```
+
+Switch it off for a run with `--coupling off`, or block on it with `--coupling block`. It is
+designed as a signal to look, not a number to blend into the impact score; see
+[coverage.md](./coverage.md) for how it complements the other two measures and what it does
+and does not catch.
 
 ## What is established, and what is not
 
