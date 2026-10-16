@@ -6,45 +6,37 @@ standalone CLI, a git pre-commit hook, or a plugin in GitHub, GitLab, and Jenkin
 
 Website: https://impactgate.officefloor.net
 
-The pattern it catches is gradual. A class gains one more method, then another, then
-another. Each change looks reasonable on its own. But over dozens of them the class ends
-up doing five different jobs, and every edit gets riskier. That slow accretion is what we
-call structural decay (also considered cohesive erosion). The gate scores each change against a base (`main` by default), so
-it shows up while it is still cheap to fix:
+The pattern it catches is gradual. A class gains one more method, then another. Each change
+looks reasonable alone, but over dozens the class ends up doing five jobs and every edit
+gets riskier. That slow accretion is structural decay. The gate scores each change against a
+base (`main` by default) so it shows up while it is still cheap to fix:
 
 ```
 impact = files_changed * Σ max(WMC_other, 1) * CC * Δlines      (over changed functions)
 ```
 
-`WMC_other` is the complexity that was already in the file or class you are editing,
-measured before your change. Adding a brand new file is cheap. There was nothing there to
-make worse. Adding a complex method to an already heavy class is expensive. The gate
-measures that difference, not the raw size of the diff.
+`WMC_other` is the complexity already in the file or class before your change, so adding to
+an already heavy class costs more than adding a new file. When impact is too high the gate
+asks you to simplify or refactor. It can warn (report only) or block (fail the build).
 
-For the reasoning behind the formula, see [Measuring the Blast Radius of
-Change](https://blog.officefloor.net/2026/08/measuring-blast-radius-of-change.html) on
-the OfficeFloor blog. For the design philosophy, why ImpactGate scores placement and
-deliberately leaves duplication to review, see [REASONING.md](./REASONING.md).
+## Measures
 
-When impact is too high, the gate asks you to simplify the change or refactor the code
-it touches. It can warn (report only) or block (fail the build).
+ImpactGate is built on two placement measures. Both hold that the harm is where complexity
+and coupling concentrate, not the total amount.
+
+- **[Change Impact](./doc/change-impact.md)** — the gate. The marginal cost of a change,
+  weighted by what it lands on (`WMC_other`). This is what `impact-gate score` computes.
+- **[Coupling Divergence](./doc/coupling-divergence.md)** — the placement check. The method
+  or class that *manufactures* coupling, a god or orchestrator, found as an outlier in the
+  net information flow it creates over the control flow. A complementary axis to the impact
+  score; see `impact_gate/placement_check.py`.
 
 ## How this differs from SonarQube (and other static analysis)
 
-SonarQube and linters score the **state** of the code. This file is too complex, this
-method too long, this block duplicated.
-
-ImpactGate scores the **marginal cost of a change**, weighted by what it lands on. The
-`WMC_other` term in the formula is the complexity already in the class *before* you
-touched it. A complex method in a brand new file is cheap. The same method added to a 
-class already carrying five responsibilities is expensive. It's the increment that turns 
-a heavy class into a god class nobody can safely edit.
-
-Duplication is one of the "state" findings in that first list, and ImpactGate does **not**
-score it. That is deliberate, not an omission. Whether a given copy is harmful duplication
-or a legitimate separate decision is a design judgment that no deterministic signal can make
-without noise. [REASONING.md](./REASONING.md) explains why, and where duplication belongs
-instead.
+SonarQube and linters score the **state** of the code. ImpactGate scores the **marginal
+cost of a change**, weighted by what it lands on, and it deliberately leaves duplication to
+review. The full contrast, and why, is in [doc/change-impact.md](./doc/change-impact.md) and
+[REASONING.md](./REASONING.md).
 
 ## Languages
 
