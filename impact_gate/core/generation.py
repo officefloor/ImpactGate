@@ -1,4 +1,4 @@
-"""Coupling-generation ("god math"), vendored from GodWatch.
+"""Coupling-generation ("god math"), vendored from the coupling-divergence project.
 
 Language-independent on top of lizard, the same substrate the rest of impact-gate uses.
 For each function, over its calls to OUR OWN code (a callee whose name is a function
