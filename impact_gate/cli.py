@@ -15,7 +15,7 @@ import sys
 
 from .core.config import MeasureConfig
 
-from . import __version__, baseline, gitio, providers, report
+from . import __version__, baseline, gitio, placement_check, providers, report
 from .config import ENFORCEMENTS, GateConfig
 from .engine import score_change
 
@@ -34,7 +34,19 @@ def _add_score_args(p: argparse.ArgumentParser) -> None:
     # threshold / enforcement overrides (win over the config file when given)
     p.add_argument("--warn-at", type=int)
     p.add_argument("--block-at", type=int)
-    p.add_argument("--enforcement", choices=ENFORCEMENTS)
+    p.add_argument("--enforcement", choices=ENFORCEMENTS,
+                   help="default enforcement for ALL measures: 'warn' (report, never fail — "
+                        "the default), 'block' (fail the build when a measure fires), or "
+                        "'off' (run nothing). Per-measure flags below override it.")
+    # Per-measure enforcement. Each overrides --enforcement for just that measure, so you can
+    # block on one signal, warn on another, and switch a third off. All three run by default.
+    p.add_argument("--change-impact", dest="change_impact_enforcement", choices=ENFORCEMENTS,
+                   help="enforcement for the change-impact score (off|warn|block).")
+    p.add_argument("--cognitive", dest="cognitive_enforcement", choices=ENFORCEMENTS,
+                   help="enforcement for the cognitive-complexity gate (off|warn|block).")
+    p.add_argument("--coupling", dest="coupling_enforcement", choices=ENFORCEMENTS,
+                   help="enforcement for the coupling-divergence placement check "
+                        "(off|warn|block).")
     p.add_argument("--tolerance", type=float)
     p.add_argument("--measure-config", help="Surveyor-style YAML for ignore globs etc.")
     # grading curve (percentile gate) overrides
@@ -53,16 +65,18 @@ def _add_score_args(p: argparse.ArgumentParser) -> None:
                         "the seed. Default from config (200).")
     # cognitive-complexity gate (absolute per-method; independent of the change-impact gate)
     p.add_argument("--cognitive-max", dest="cognitive_max", type=int,
-                   help="block when any method in a changed file has cognitive complexity "
-                        "(Campbell 2018) above this. Catches deeply-nested, hard-to-read "
-                        "methods the change-impact score cannot see. Off unless set; "
-                        "SonarSource's default line is 15.")
+                   help="cognitive-complexity (Campbell 2018) limit: a method in a changed "
+                        "file over this is flagged (and fails the build when --cognitive is "
+                        "'block'). Catches deeply-nested, hard-to-read methods the change-"
+                        "impact score cannot see. Default 20; SonarSource's line is 15. The "
+                        "gate is on by default — use --cognitive off to disable it.")
 
 
 # Gate knobs an argparse flag may override on top of the config file, when given.
 _OVERRIDE_ATTRS = ("warn_at", "block_at", "enforcement", "tolerance", "measure_config",
                    "curve_enabled", "baseline_file", "warn_percentile", "block_percentile",
-                   "curve_prior_weight", "cognitive_max")
+                   "curve_prior_weight", "cognitive_max", "change_impact_enforcement",
+                   "cognitive_enforcement", "coupling_enforcement")
 
 
 def _resolve_config(args) -> GateConfig:
@@ -88,8 +102,12 @@ def _cmd_score(args) -> int:
 
     score = score_change(changed, mcfg)
 
+    # Change-impact gate. It still computes and reports the number when switched off; "off"
+    # only means it never contributes to the verdict.
     grade = None
-    if cfg.curve_enabled:
+    if not cfg.enabled("change_impact"):
+        level, blocked = "ok", False
+    elif cfg.curve_enabled:
         grades = providers.select_grade_provider(args.repo, cfg.baseline_file,
                                                  cfg.curve_prior_weight)
         grade = grades.grade(providers.ChangeSummary.of(score), args.repo)
@@ -107,14 +125,32 @@ def _cmd_score(args) -> int:
         level = "block"
         blocked = blocked or cfg.blocks_cognitive(score.cognitive_max)
 
+    # Coupling-divergence placement check: a snapshot test on the after-tree for the methods
+    # this change touched. Advisory in 'warn' (reported beside the score, never blends into
+    # it); fails the gate only when the coupling measure is in 'block'. It is best-effort —
+    # a parse failure degrades to no coupling section, never a crashed gate.
+    coupling = None
+    if cfg.coupling_enabled():
+        try:
+            coupling = placement_check.check(args.repo, args.mode, args.base)
+        except Exception as e:                # advisory signal: never fail the gate on it
+            print(f"impact-gate: coupling check skipped ({e})", file=sys.stderr)
+        if coupling is not None and placement_check.has_vortex(coupling):
+            if cfg.coupling_level(True) == "block":
+                level = "block"
+            blocked = blocked or cfg.blocks_coupling(True)
+
     if args.format == "json":
-        print(report.render_json(score, cfg, level, args.mode, args.base, blocked, grade))
+        print(report.render_json(score, cfg, level, args.mode, args.base, blocked, grade,
+                                 coupling))
     elif args.format == "markdown":
-        print(report.render_markdown(score, cfg, level, args.mode, args.base, blocked, grade))
+        print(report.render_markdown(score, cfg, level, args.mode, args.base, blocked, grade,
+                                     coupling))
     else:
-        print(report.render_text(score, cfg, level, args.mode, args.base, blocked, grade))
+        print(report.render_text(score, cfg, level, args.mode, args.base, blocked, grade,
+                                 coupling))
         if blocked:
-            print("\nimpact-gate: change BLOCKED. Impact exceeds the block threshold. "
+            print("\nimpact-gate: change BLOCKED. A measure in 'block' mode fired. "
                   "Simplify the change or refactor the code it touches, then retry.",
                   file=sys.stderr)
     return 2 if blocked else 0

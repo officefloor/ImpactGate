@@ -23,8 +23,15 @@
   },
 
   "cognitive": {
-    "note": "Absolute per-method Cognitive Complexity (Campbell 2018) gate, independent of the change-impact composite/curve. null = off. When set, any method in a changed file whose cognitive complexity exceeds this value blocks (under 'block' enforcement). SonarSource's default line is 15.",
-    "cognitive_max": null
+    "note": "Absolute per-method Cognitive Complexity (Campbell 2018) gate, independent of the change-impact composite/curve. ON by default: any method in a changed file whose cognitive complexity exceeds this value is reported (and fails the build only when the cognitive measure is in 'block'). SonarSource's default line is 15; this gate is a touch more permissive at 20. Switch it off with enforcement 'off' for the cognitive measure.",
+    "cognitive_max": 20
+  },
+
+  "measures": {
+    "note": "Per-measure enforcement override. All three measures (change_impact, cognitive, coupling) run by default and inherit the top-level 'enforcement' (warn) unless overridden here. 'off' turns a measure off entirely (not run, not reported); 'warn' reports only, never fails the build; 'block' fails the build when that measure fires. So nothing blocks on first use; turn blocking on for every measure with top-level 'enforcement: block', or for one measure by setting it here, and switch a measure off the same way.",
+    "change_impact_enforcement": null,
+    "cognitive_enforcement": null,
+    "coupling_enforcement": null
   },
 
   "baseline": {
