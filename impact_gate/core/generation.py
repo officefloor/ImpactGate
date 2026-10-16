@@ -32,18 +32,30 @@ _STRIP = re.compile(
 _TEST_DIR = re.compile(r"(?:^|/)(?:test|tests|testing|spec|__tests__)(?:/|$)")
 OUTLIER_Z = 3.5
 WMC_GOD = 47
+# Dependency/build/vendored/generated trees are not the project's own code (a single
+# vendored tree-sitter parser.c can be ~100 MB), and a file over this size is a
+# generated/minified blob, not a hand-maintained unit. Both are skipped, which also keeps
+# the lexical scan from stalling on a giant generated file.
+_SKIP_DIRS = {".git", "node_modules", "build", "target", "dist", ".venv", "venv",
+              "vendor", "vendored", "third_party", "thirdparty", "third-party",
+              "generated", "externals", "external", "deps", ".gradle", "out"}
+MAX_FILE_BYTES = 1_000_000
 
 
 def source_files(root: str, include_tests: bool = False) -> list[str]:
     out = []
     for dirpath, dirnames, filenames in os.walk(root):
-        dirnames[:] = [d for d in dirnames if d not in (".git", "node_modules", "build",
-                                                        "target", "dist", ".venv", "venv")]
+        dirnames[:] = [d for d in dirnames if d not in _SKIP_DIRS]
         for fn in filenames:
             if os.path.splitext(fn)[1].lower() not in SOURCE_EXTS:
                 continue
             rel = os.path.relpath(os.path.join(dirpath, fn), root)
             if not include_tests and _TEST_DIR.search("/" + rel.replace(os.sep, "/")):
+                continue
+            try:
+                if os.path.getsize(os.path.join(dirpath, fn)) > MAX_FILE_BYTES:
+                    continue
+            except OSError:
                 continue
             out.append(rel)
     return out
